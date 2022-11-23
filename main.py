@@ -1,9 +1,64 @@
 import cv2 as cv
 import numpy as np
+from time import time
+import math
 from functions import detect_objects, draw_objects, save_image
+from window_capture import WindowCapture
 
+# TODO:
+# - detect collectibles: class ManaCollective
+# - track objects
+
+
+window = WindowCapture('Heroes of the Storm')
+loop_time = time()
+while(True):
+    # get screenshot
+    screenshot = window.get_screenshot()
+    #screenshot = cv.imread("imgs\\output.jpg", cv.IMREAD_UNCHANGED)
+
+    # detect
+    bot, minions_red, minions_blue = detect_objects(screenshot)
+    # draw
+    l_screenshot = draw_objects(screenshot, bot, minions_red, minions_blue)
+    # show
+    cv.imshow('Computer Vision', l_screenshot)
+
+    # debug the loop rate
+    print('FPS {}'.format(1 / (time() - loop_time)))
+    loop_time = time()
+
+    # press 'q' with the output window focused to exit.
+    # waits 1 ms every loop to process key presses
+    if cv.waitKey(1) == ord('q'):
+        cv.destroyAllWindows()
+        break
+
+save_image(l_screenshot, f"imgs\\output.jpg")
+print('Done.')
+
+
+# GET MIN MAX COLORS FROM IMGAE
+"""
+    screenshot = cv.imread("imgs\\tmp.jpg", cv.IMREAD_UNCHANGED)
+    hsv = cv.cvtColor(screenshot, cv.COLOR_BGR2HSV)
+    
+    min_h, min_s, min_v = 300, 300, 300
+    max_h, max_s, max_v = -1, -1, -1
+    for i in range(0, len(screenshot)):
+        for j in range(0, len(screenshot[0])):
+            h = hsv[i][j][0]
+            s = hsv[i][j][1]
+            v = hsv[i][j][2]
+            if h < min_h: min_h = h
+            if h > max_h: max_h = h
+            if s < min_s: min_s = s
+            if s > max_s: max_s = s
+            if v < min_v: min_v = v
+            if v > max_v: max_v = v
 """
 # PYAUTOGUI
+"""
 import pyautogui
 screenWidth, screenHeight = pyautogui.size()    # Get the size of the primary monitor.
 print(f'screenWidth={screenWidth}, screenHeight={screenHeight}')
@@ -13,8 +68,8 @@ time.sleep(2)
 pyautogui.moveTo(214, 98) # Move the mouse to XY coordinates.
 pyautogui.click()          # Click the mouse.
 """
+# MATCH TEMPLATE
 """
-# COMPARE BY PART OF IMAGE
 img = cv.imread('imgs\\test_1.jpg', cv.IMREAD_UNCHANGED)  # cv.IMREAD_UNCHANGED, cv.IMREAD_REDUCED_COLOR_2
 
 hat = cv.imread('imgs\\mage_hat_blue.jpg', cv.IMREAD_UNCHANGED)
@@ -35,7 +90,6 @@ else:
     print('Hat not found :(')
 cv.imwrite('imgs\\result.jpg', img)
 
-
 min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
 print('Best match top left position: %s' % str(max_loc))
 print('Best match confidence: %s' % max_val)
@@ -50,15 +104,8 @@ if max_val >= threshold:
 else:
     print('Hat not found :(')
 """
-#k = cv.waitKey(5) & 0xFF
-#cv.destroyAllWindows()
-
-#img = cv.imread('imgs\\bot_health_bar.jpg', cv.IMREAD_UNCHANGED)  # cv.IMREAD_UNCHANGED, cv.IMREAD_REDUCED_COLOR_2
-#img = cv.imread('imgs\\bot_ring.jpg', cv.IMREAD_UNCHANGED)  # cv.IMREAD_UNCHANGED, cv.IMREAD_REDUCED_COLOR_2
-
-
-"""
 # CONVERT VIDEO TO FRAMES
+"""
 vidcap = cv.VideoCapture('C:\\Users\\Lordor\\Videos\\Captures\\vid_1.mp4')
 success, image = vidcap.read()
 count_all = 0
@@ -84,12 +131,3 @@ print(f'number of frames={count_all}, success={count_s} ({(count_s/count_all)*10
   save_image(l_img, file_path)
   print(f'frame {i}')
 """
-
-file_path = f"imgs\\test_3.jpg"
-img = cv.imread(file_path, cv.IMREAD_UNCHANGED)  # cv.IMREAD_UNCHANGED, cv.IMREAD_REDUCED_COLOR_2
-# detect
-bot, minions_red, minions_blue = detect_objects(img)
-# draw
-l_img = draw_objects(img, bot, minions_red, minions_blue)
-# save
-save_image(l_img, f"imgs\\l_frames\\test_3_labeled.jpg")

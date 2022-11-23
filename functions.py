@@ -1,6 +1,6 @@
 import cv2 as cv
 import numpy as np
-from classes import BotClass, MinionsClass
+from image_objects import BotClass, MinionsClass
 
 
 def detect_objects(img):
@@ -20,8 +20,17 @@ def detect_objects(img):
 
 def draw_objects(img, bot, minions_red, minions_blue):
     out_img = bot.draw(img)
+    if out_img is None:
+        out_img = img
+
     out_img = minions_red.draw(out_img)
+    if out_img is None:
+        out_img = img
+
     out_img = minions_blue.draw(out_img)
+    if out_img is None:
+        out_img = img
+
     return out_img
 
 
