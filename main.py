@@ -1,32 +1,76 @@
 import cv2 as cv
-import numpy as np
-from time import time
-import math
-from functions import detect_objects, draw_objects, save_image
+
+import functions
 from window_capture import WindowCapture
+from functions import *
+import numpy as np
 
-# TODO:
-# - detect collectibles: class ManaCollective
-# - track objects
+a = functions.Actions()
+
+# TODO: plan for game
+#   0. No ally, no enemy, toggle ON minions, control panel hidden, talent tree hidden
+#   1. Refresh forts (unhide, hide control panel)
+#   2. Move to gate, demount
+#   3. Perform all actions
+#   ...
+#   When dead -> check total xp and start from step 1)
+# ----------------------------------------------------------------------------------------------------------
+
+# TODO: actions
+#   - move & basic attack (A key)
+#   - move & skill attack (Q, W keys)
+#   - move & collect globes
 
 
+# Implemented:
+# 'use_well'
+# 'hide_in_bushes'
+# 'hide_behind_gate
+# 'escape_behind_gate' (with spell 'E')
+# 'use_spell_d' (recover health)
+# ----------------------------------------------------------------------------------------------------------
+
+t0 = time.time()
 window = WindowCapture('Heroes of the Storm')
-loop_time = time()
+loop_time = time.time()
 while(True):
     # get screenshot
-    screenshot = window.get_screenshot()
-    #screenshot = cv.imread("imgs\\output.jpg", cv.IMREAD_UNCHANGED)
+    frame = window.get_screenshot()
+    #screenshot = cv.imread("imgs\\in_img.png", cv.IMREAD_UNCHANGED)
+    #cv.imshow('Computer Vision', screenshot)
 
-    # detect
-    bot, minions_red, minions_blue = detect_objects(screenshot)
-    # draw
-    l_screenshot = draw_objects(screenshot, bot, minions_red, minions_blue)
+    health_curr, health_max = get_bot_health_value(frame)
+    mana_curr, mana_max = get_bot_mana_value(frame)
+    cooldowns = get_cooldowns(frame)
+    #print(f'Health:{health_curr}/{health_max}\t Mana:{mana_curr}/{mana_max}\t Cooldowns:{cooldowns}')
+    #if is_bot_dead(frame):
+    #    print('>>> DEAD!')
+
+    #if is_bot_icon_in_place(frame, 'gate'):
+    #    out_x, out_y = get_well_position(frame)
+    #    print('well:', out_x, out_y)
+
+
+    if 2 < time.time() - t0 < 2.5:
+        a.start('escape_behind_gate')
+    a.process(frame)
+    a.printout()
+
+    if time.time() - t0 > 40:
+        break
+
+
+    """
+    detect_objects(screenshot)
+    track_objects()
+    l_screenshot = paint_objects()
     # show
     cv.imshow('Computer Vision', l_screenshot)
+    """
 
     # debug the loop rate
-    print('FPS {}'.format(1 / (time() - loop_time)))
-    loop_time = time()
+    #print('FPS {}'.format(1 / (time() - loop_time)))
+    loop_time = time.time()
 
     # press 'q' with the output window focused to exit.
     # waits 1 ms every loop to process key presses
@@ -34,28 +78,87 @@ while(True):
         cv.destroyAllWindows()
         break
 
-save_image(l_screenshot, f"imgs\\output.jpg")
+#save_image(l_screenshot, f"imgs\\output.jpg")
 print('Done.')
 
 
-# GET MIN MAX COLORS FROM IMGAE
+
+# GET H,S,V VALUES OF IMAGE
 """
-    screenshot = cv.imread("imgs\\tmp.jpg", cv.IMREAD_UNCHANGED)
-    hsv = cv.cvtColor(screenshot, cv.COLOR_BGR2HSV)
-    
-    min_h, min_s, min_v = 300, 300, 300
-    max_h, max_s, max_v = -1, -1, -1
-    for i in range(0, len(screenshot)):
-        for j in range(0, len(screenshot[0])):
-            h = hsv[i][j][0]
-            s = hsv[i][j][1]
-            v = hsv[i][j][2]
-            if h < min_h: min_h = h
-            if h > max_h: max_h = h
-            if s < min_s: min_s = s
-            if s > max_s: max_s = s
-            if v < min_v: min_v = v
-            if v > max_v: max_v = v
+max_value = 255
+max_value_H = 360 // 2
+low_H = 0
+low_S = 0
+low_V = 0
+high_H = max_value_H
+high_S = max_value
+high_V = max_value
+window_capture_name = 'Video Capture'
+window_detection_name = 'Object Detection'
+low_H_name = 'Low H'
+low_S_name = 'Low S'
+low_V_name = 'Low V'
+high_H_name = 'High H'
+high_S_name = 'High S'
+high_V_name = 'High V'
+def on_low_H_thresh_trackbar(val):
+    global low_H
+    global high_H
+    low_H = val
+    low_H = min(high_H - 1, low_H)
+    cv.setTrackbarPos(low_H_name, window_detection_name, low_H)
+def on_high_H_thresh_trackbar(val):
+    global low_H
+    global high_H
+    high_H = val
+    high_H = max(high_H, low_H + 1)
+    cv.setTrackbarPos(high_H_name, window_detection_name, high_H)
+def on_low_S_thresh_trackbar(val):
+    global low_S
+    global high_S
+    low_S = val
+    low_S = min(high_S - 1, low_S)
+    cv.setTrackbarPos(low_S_name, window_detection_name, low_S)
+def on_high_S_thresh_trackbar(val):
+    global low_S
+    global high_S
+    high_S = val
+    high_S = max(high_S, low_S + 1)
+    cv.setTrackbarPos(high_S_name, window_detection_name, high_S)
+def on_low_V_thresh_trackbar(val):
+    global low_V
+    global high_V
+    low_V = val
+    low_V = min(high_V - 1, low_V)
+    cv.setTrackbarPos(low_V_name, window_detection_name, low_V)
+def on_high_V_thresh_trackbar(val):
+    global low_V
+    global high_V
+    high_V = val
+    high_V = max(high_V, low_V + 1)
+    cv.setTrackbarPos(high_V_name, window_detection_name, high_V)
+cv.namedWindow(window_capture_name)
+cv.namedWindow(window_detection_name)
+cv.createTrackbar(low_H_name, window_detection_name, low_H, max_value_H, on_low_H_thresh_trackbar)
+cv.createTrackbar(high_H_name, window_detection_name, high_H, max_value_H, on_high_H_thresh_trackbar)
+cv.createTrackbar(low_S_name, window_detection_name, low_S, max_value, on_low_S_thresh_trackbar)
+cv.createTrackbar(high_S_name, window_detection_name, high_S, max_value, on_high_S_thresh_trackbar)
+cv.createTrackbar(low_V_name, window_detection_name, low_V, max_value, on_low_V_thresh_trackbar)
+cv.createTrackbar(high_V_name, window_detection_name, high_V, max_value, on_high_V_thresh_trackbar)
+
+frame = cv.imread("imgs\\tmp_2.jpg", cv.IMREAD_UNCHANGED)
+[(x_min, y_min), (x_max, y_max)] = _SKIP_AREA_BOTTOM_RIGHT
+frame = frame[y_min:y_max, :]
+while True:
+    frame_HSV = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+    frame_threshold = cv.inRange(frame_HSV, (low_H, low_S, low_V), (high_H, high_S, high_V))
+
+    cv.imshow(window_capture_name, frame)
+    cv.imshow(window_detection_name, frame_threshold)
+
+    if cv.waitKey(30) == ord('q'):
+        cv.destroyAllWindows()
+        break
 """
 # PYAUTOGUI
 """

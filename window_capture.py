@@ -2,7 +2,7 @@ import numpy as np
 import win32gui
 import win32ui
 import win32con
-from global_vars import _SCREEN_W, _SCREEN_H
+from global_vars import SCREEN_W, SCREEN_H
 
 
 class WindowCapture:
@@ -12,8 +12,8 @@ class WindowCapture:
         if not self.hwnd:
             raise Exception('Window not found: {}'.format(window_name))
 
-        self.w = _SCREEN_W
-        self.h = _SCREEN_H
+        self.w = SCREEN_W
+        self.h = SCREEN_H
         # get the window size
         #window_rect = win32gui.GetWindowRect(self.hwnd)
         #self.w = window_rect[2] - window_rect[0]

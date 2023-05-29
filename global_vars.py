@@ -1,5 +1,52 @@
-import numpy as np
 import cv2 as cv
+import numpy as np
+
+###################################################
+#        GENERAL
+# -------------------------------------------------
+SCREEN_W = 1920
+SCREEN_H = 1080
+
+###################################################
+#        TEMPLATES
+# -------------------------------------------------
+template_H08_slash = cv.imread(f'imgs\\templates\\numbers\\H08_slash.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_0 = cv.imread(f'imgs\\templates\\numbers\\H08_num_0.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_1 = cv.imread(f'imgs\\templates\\numbers\\H08_num_1.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_2 = cv.imread(f'imgs\\templates\\numbers\\H08_num_2.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_3 = cv.imread(f'imgs\\templates\\numbers\\H08_num_3.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_4 = cv.imread(f'imgs\\templates\\numbers\\H08_num_4.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_5 = cv.imread(f'imgs\\templates\\numbers\\H08_num_5.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_6 = cv.imread(f'imgs\\templates\\numbers\\H08_num_6.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_7 = cv.imread(f'imgs\\templates\\numbers\\H08_num_7.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_8 = cv.imread(f'imgs\\templates\\numbers\\H08_num_8.png', cv.IMREAD_GRAYSCALE)
+template_H08_num_9 = cv.imread(f'imgs\\templates\\numbers\\H08_num_9.png', cv.IMREAD_GRAYSCALE)
+
+template_H10_slash = cv.imread(f'imgs\\templates\\numbers\\H10_slash.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_0 = cv.imread(f'imgs\\templates\\numbers\\H10_num_0.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_1 = cv.imread(f'imgs\\templates\\numbers\\H10_num_1.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_2 = cv.imread(f'imgs\\templates\\numbers\\H10_num_2.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_3 = cv.imread(f'imgs\\templates\\numbers\\H10_num_3.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_4 = cv.imread(f'imgs\\templates\\numbers\\H10_num_4.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_5 = cv.imread(f'imgs\\templates\\numbers\\H10_num_5.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_6 = cv.imread(f'imgs\\templates\\numbers\\H10_num_6.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_7 = cv.imread(f'imgs\\templates\\numbers\\H10_num_7.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_8 = cv.imread(f'imgs\\templates\\numbers\\H10_num_8.png', cv.IMREAD_GRAYSCALE)
+template_H10_num_9 = cv.imread(f'imgs\\templates\\numbers\\H10_num_9.png', cv.IMREAD_GRAYSCALE)
+
+template_death_icon = cv.imread(f'imgs\\templates\\death_icon.png', cv.IMREAD_GRAYSCALE)
+template_bot_icon = cv.imread(f'imgs\\templates\\bot_icon.png', cv.IMREAD_GRAYSCALE)
+template_well = cv.imread(f'imgs\\templates\\well.png', cv.IMREAD_GRAYSCALE)
+template_plus_symbol = cv.imread(f'imgs\\templates\\plus_symbol.png', cv.IMREAD_GRAYSCALE)
+template_hidden_symbol = cv.imread(f'imgs\\templates\\hidden_symbol.png', cv.IMREAD_GRAYSCALE)
+template_blocked_symbol = cv.imread(f'imgs\\templates\\blocked_symbol.png', cv.IMREAD_GRAYSCALE)
+
+
+
+
+
+
+
 ###################################################
 #        GENERAL
 # -------------------------------------------------
@@ -7,10 +54,8 @@ import cv2 as cv
 _SKIP_AREA_TOP_MIDDLE =    [(630, 0), (1200, 77)]
 _SKIP_AREA_BOTTOM_LEFT =   [(0, 894), (432, 1080)]
 _SKIP_AREA_BOTTOM_MIDDLE = [(657, 982), (1263, 1080)]
-_SKIP_AREA_BOTTOM_RIGHT =  [(1544, 838), (1920, 1080)]
+_SKIP_AREA_BOTTOM_RIGHT =  [(1565, 872), (1916, 1036)]
 _SKIP_AREAS = [_SKIP_AREA_TOP_MIDDLE, _SKIP_AREA_BOTTOM_LEFT, _SKIP_AREA_BOTTOM_MIDDLE, _SKIP_AREA_BOTTOM_RIGHT]
-_SCREEN_W = 1920
-_SCREEN_H = 1080
 
 
 
@@ -56,7 +101,6 @@ _MANA_CIRCLE_MIN_RADIUS = 14
 _MANA_CIRCLE_MAX_RADIUS = 20
 
 
-# param2
 
 ###################################################
 #        BOT
@@ -65,15 +109,15 @@ _MANA_CIRCLE_MAX_RADIUS = 20
 #                             min: 58, 200, 120         max: 61, 235, 230
 _BOT_CIRCLE_COLOR_THR = [np.array([58, 200, 120]), np.array([61, 245, 240])]
 # Health Bar - dimensions
-_BOT_HB_BOX_MIN_H = 6
-_BOT_HB_BOX_H = 9
-_BOT_HB_BOX_MAX_H = 14
+_BOT_HB_BOX_MIN_H = 15
+_BOT_HB_BOX_H = 16
+_BOT_HB_BOX_MAX_H = 17
 _BOT_HB_BOX_MIN_W = 2
 _BOT_HB_BOX_W = 124
 _BOT_HB_BOX_MAX_W = 130
 # Health Bar - color
-#                         min: 50, 200, 200         max: 55, 230, 210
-_BOT_HB_COLOR_THR = [np.array([50, 200, 200]), np.array([55, 230, 210])]
+#                         min: 50, 100, 150         max: 55, 255, 255
+_BOT_HB_COLOR_THR = [np.array([50, 100, 150]), np.array([55, 255, 255])]
 # Model - dimensions
 _BOT_BOX_W_MOUNT = 100
 _BOT_BOX_H_MOUNT = 150
@@ -83,3 +127,13 @@ _BOT_BOX_W_UNMOUNT = 80
 _BOT_BOX_H_UNMOUNT = 110
 _BOT_BOX_H_SHIFT_UNMOUNT = 44
 _BOT_BOX_X_SHIFT_UNMOUNT = -5
+
+
+###################################################
+#        WELL
+# -------------------------------------------------
+# Health Bar - dimensions
+_WELL_HB_BOX_H = 12
+_WELL_HB_BOX_W = 200
+# Health Bar - color
+_WELL_HB_COLOR_THR = [np.array([66, 0, 134]), np.array([100, 255, 255])]
