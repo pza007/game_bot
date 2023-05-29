@@ -3,6 +3,241 @@ from global_vars import *
 import time
 
 
+def get_distance_between_points(point1, point2):
+    return np.linalg.norm(np.array((point1[0], point1[1])) - np.array((point2[0], point2[1])))
+
+
+def point_inside_polygon(x, y, poly):
+    n = len(poly)
+    inside = False
+    p1x, p1y = poly[0]
+    for i in range(n + 1):
+        p2x, p2y = poly[i % n]
+        if y > min(p1y, p2y):
+            if y <= max(p1y, p2y):
+                if x <= max(p1x, p2x):
+                    if p1y != p2y:
+                        xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                    if p1x == p2x or x <= xints:
+                        inside = not inside
+        p1x, p1y = p2x, p2y
+    return inside
+
+
+def get_minions_positions(in_img, in_hsv):
+    """
+    out: [dict] {color: [(x_center, y_center), ...] }
+
+window = WindowCapture('Heroes of the Storm')
+img = window.get_screenshot()
+hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+print(get_minions_positions(img, hsv))
+    """
+    def get_health_bars(in_color):
+        HB_COLOR_THR_RED = [np.array([150, 170, 80]), np.array([190, 255, 230])]
+        HB_COLOR_THR_BLUE = [np.array([90, 120, 90]), np.array([120, 220, 255])]
+        HB_BOX_H = 4
+        HB_BOX_MIN_W = 1
+        HB_BOX_MAX_W = 51
+        f_debug = False
+
+        def get_mask():
+            # set color thresholds
+            if in_color == 'red':
+                thr = HB_COLOR_THR_RED
+            else:   # 'blue'
+                thr = HB_COLOR_THR_BLUE
+            # create mask, based on thresholds
+            return cv.inRange(in_hsv, thr[0], thr[1])
+        def transform_mask(in_mask):
+            kernel = np.ones((3, 3), np.uint8)
+            result = cv.morphologyEx(in_mask, cv.MORPH_OPEN, kernel)
+            return result
+        def get_contours(in_mask):
+            return cv.findContours(in_mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+        def filter_1(in_contours):
+            # filter contours with 4 points (rectangle)
+            out_contours = []
+            for contour in in_contours:
+                if len(contour) == 4:
+                    x_min = min([_contour[0][0] for _contour in contour])  # point X
+                    x_max = max([_contour[0][0] for _contour in contour])  # point X
+                    y_min = min([_contour[0][1] for _contour in contour])  # point Y
+                    y_max = max([_contour[0][1] for _contour in contour])  # point Y
+                    out_contours.append((x_min, y_min, x_max, y_max))
+            return out_contours
+        def filter_2(in_contours):
+            # filter contours with correct dimensions
+            out_contours = []
+            for (x_min, y_min, x_max, y_max) in in_contours:
+                height = y_max - y_min + 1
+                width = x_max - x_min + 1
+                if height == HB_BOX_H and HB_BOX_MIN_W <= width <= HB_BOX_MAX_W:
+                    out_contours.append((x_min, y_min, x_max, y_max))
+            return out_contours
+        def filter_3(in_contours):
+            # filter contours located outside skip areas
+            out_contours = []
+            for (x_min, y_min, x_max, y_max) in in_contours:
+                success = True
+                for box in SKIP_AREAS:
+                    points = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
+                    polygon = [box[0], (box[1][0], box[0][1]), box[1], (box[0][0], box[1][1])]
+                    for point in points:
+                        if point_inside_polygon(point[0], point[1], polygon):
+                            success = False
+                            break
+                    if not success:
+                        break
+                if success:
+                    out_contours.append((x_min, y_min, x_max, y_max))
+            return out_contours
+        def filter_4(in_contours):
+            # filter contours with black border outside
+            out_contours = []
+            for (x_min, y_min, x_max, y_max) in in_contours:
+                # min,max points of border inside window?
+                b_x_min, b_y_min = x_min - 1, y_min - 1
+                b_x_max, b_y_max = x_max + HB_BOX_MAX_W - (x_max - x_min) + 1, y_max + 1
+                if 0 <= b_x_min <= SCREEN_W - 1 and 0 <= b_y_min <= SCREEN_H - 1 and \
+                        0 <= b_x_max <= SCREEN_W - 1 and 0 <= b_y_max <= SCREEN_H - 1:
+
+                    # border color thresholds
+                    b_thr, g_thr, r_thr = 0, 0, 0  # B,G,R
+                    if in_color == 'red':
+                        b_thr, g_thr, r_thr = 10, 10, 90
+                    else:  # blue
+                        b_thr, g_thr, r_thr = 90, 10, 10
+
+                    # borders
+                    cnt_top, cnt_bottom = 0, 0
+                    for x in range(b_x_min, b_x_max + 1):
+                        # top border
+                        [b, g, r, a] = in_img[b_y_min][x]  # B,G,R,A
+                        if b <= b_thr and g <= g_thr and r <= r_thr:
+                            cnt_top += 1
+                        # bottom border
+                        [b, g, r, a] = in_img[b_y_max][x]
+                        if b <= b_thr and g <= g_thr and r <= r_thr:
+                            cnt_bottom += 1
+                    cnt_left, cnt_right = 0, 0
+                    for y in range(b_y_min, b_y_max + 1):
+                        # left border
+                        [b, g, r, a] = in_img[y][b_x_min]
+                        if b <= b_thr and g <= g_thr and r <= r_thr:
+                            cnt_left += 1
+                        # right border
+                        [b, g, r, a] = in_img[y][b_x_max]
+                        if b <= b_thr and g <= g_thr and r <= r_thr:
+                            cnt_right += 1
+
+                    # final check
+                    # print(cnt_top, cnt_bottom, cnt_left, cnt_right)
+                    # color: _HB_BOX_MAX_W + 1 while pixel + 2 black pixels for border
+                    if cnt_top == HB_BOX_MAX_W + 3 and cnt_bottom == HB_BOX_MAX_W + 3:
+                        # color: _HB_BOX_H + 2 black pixels for border
+                        if cnt_left == HB_BOX_H + 2:
+                            out_contours.append((x_min, y_min, x_max, y_max))
+                            # print('\t added')
+
+            return out_contours
+
+        if f_debug:
+            import copy
+            cv.imwrite('imgs\\_output1.jpg', in_img)
+            mask = get_mask()
+            cv.imwrite('imgs\\_output2.jpg', mask)
+            mask = transform_mask(mask)
+            cv.imwrite('imgs\\_output3.jpg', mask)
+            contours, _ = get_contours(mask)
+            img = copy.deepcopy(in_img)
+            for contour in contours:
+               x_min = min([_contour[0][0] for _contour in contour])  # point X
+               x_max = max([_contour[0][0] for _contour in contour])  # point X
+               y_min = min([_contour[0][1] for _contour in contour])  # point Y
+               y_max = max([_contour[0][1] for _contour in contour])  # point Y
+               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+            cv.imwrite('imgs\\_output4.jpg', img)
+            contours = filter_1(contours)
+            img = copy.deepcopy(in_img)
+            for (x_min, y_min, x_max, y_max) in contours:
+               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+            cv.imwrite('imgs\\_output5.jpg', img)
+            contours = filter_2(contours)
+            img = copy.deepcopy(in_img)
+            for (x_min, y_min, x_max, y_max) in contours:
+               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+            cv.imwrite('imgs\\_output6.jpg', img)
+            contours = filter_3(contours)
+            img = copy.deepcopy(in_img)
+            for (x_min, y_min, x_max, y_max) in contours:
+               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+            cv.imwrite('imgs\\_output7.jpg', img)
+            contours = filter_4(contours)
+            img = copy.deepcopy(in_img)
+            for (x_min, y_min, x_max, y_max) in contours:
+               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+            cv.imwrite('imgs\\_output8.jpg', img)
+
+        mask = get_mask()
+        mask = transform_mask(mask)
+        contours, _ = get_contours(mask)
+        contours = filter_1(contours)
+        contours = filter_2(contours)
+        contours = filter_3(contours)
+        contours = filter_4(contours)
+
+        return contours
+
+    def get_points(in_dict):
+        HB_BOX_MAX_W = 51
+        MN_BOX_W = 65
+        MN_BOX_H = 73
+        f_debug = False
+
+        out = {}    # {color: [(x,y), ...] }
+        for color, list_of_positions in in_dict.items():
+            new_list = []
+            for positions in list_of_positions:     # (x_min, y_min, x_max, y_max)
+
+                x_hb_min = positions[0]
+                y_hb_min = positions[1]
+                x_hb_max = positions[2]
+                y_hb_max = positions[3]
+                x_hb_middle = x_hb_min + int(HB_BOX_MAX_W // 2)
+
+                x_min = x_hb_middle - MN_BOX_W
+                x_max = x_hb_middle + MN_BOX_W
+                y_min = y_hb_max
+                y_max = y_min + MN_BOX_H + 30
+
+                x_new = x_min + (x_max - x_min) // 2
+                y_new = y_min + (y_max - y_min) // 2
+                new_list.append((x_new, y_new)) # (x,y) of center
+
+            out[color] = new_list
+
+        if f_debug:
+            import copy
+            img = copy.deepcopy(in_img)
+            for color, list_of_points in out.items():
+                for (x, y) in list_of_points:
+                    if color == 'red':
+                        cv.rectangle(img, (x-2, y-2), (x+2, y+2), (0, 0, 255), 2)
+                    else:   # blue
+                        cv.rectangle(img, (x-2, y-2), (x+2, y+2), (255, 0, 0), 2)
+                cv.imwrite(f'imgs\\_output_{color}.jpg', img)
+
+        return out
+
+    out = {}  # {color: [(x_min, y_min, x_max, y_max), ...] }
+    for color in ['red', 'blue']:
+        out[color] = get_health_bars(color)
+    out = get_points(out)   # {color: [(x_center, y_center), ...] }
+
+    return out
+
+
 def get_bot_positions(in_hsv):
     """
     out: [dict] or None, description [str]
@@ -23,12 +258,12 @@ cv.rectangle(frame, (x_center-1, y_center-1), (x_center+1, y_center+1), (0, 0, 2
 cv.imwrite('imgs\\_result.jpg', frame)
     """
     out = {
-        'health_bar':     ((None, None, None, None), (None, None)),  # ((x_min, y_min, x_max, y_max), (x_center,y_center))
-        'bounding_box':   ((None, None, None, None), (None, None)),  # ((x_min, y_min, x_max, y_max), (x_center,y_center))
-        'circle':         ((None, None, None, None), (None, None)),  # ((x_min, y_min, x_max, y_max), (x_center,y_center))
+        'health_bar': ((None, None, None, None), (None, None)),  # ((x_min, y_min, x_max, y_max), (x_center,y_center))
+        'bounding_box': ((None, None, None, None), (None, None)),  # ((x_min, y_min, x_max, y_max), (x_center,y_center))
+        'circle': ((None, None, None, None), (None, None)),  # ((x_min, y_min, x_max, y_max), (x_center,y_center))
     }
     _HEALTH_BAR_COLOR_THR = [np.array([50, 100, 150]), np.array([55, 255, 255])]
-    _HEALTH_BAR_BOX = [8, 11, 2, 11]     # height_min, height_max, width_min, width_max
+    _HEALTH_BAR_BOX = [8, 11, 2, 11]  # height_min, height_max, width_min, width_max
     _BOT_BOX_W_MOUNT = 100
     _BOT_BOX_H_MOUNT = 150
     _BOT_BOX_H_SHIFT_MOUNT = 90
@@ -39,11 +274,12 @@ cv.imwrite('imgs\\_result.jpg', frame)
     _BOT_BOX_X_SHIFT_UNMOUNT = -5
     _BOT_CIRCLE_SHIFT_MOUNT = 62
     _BOT_CIRCLE_SHIFT_UNMOUNT = 44
-    _BOT_CIRCLE_W = 43*2
-    _BOT_CIRCLE_H = 36*2
+    _BOT_CIRCLE_W = 43 * 2
+    _BOT_CIRCLE_H = 36 * 2
 
     def get_health_bar():
         """ find bot's health bar, depending on it's position """
+
         def execute():
             hsv = in_hsv[shift_y_min:shift_y_max, shift_x_min:shift_x_max]
             mask = cv.inRange(hsv, _HEALTH_BAR_COLOR_THR[0], _HEALTH_BAR_COLOR_THR[1])
@@ -73,8 +309,9 @@ cv.imwrite('imgs\\_result.jpg', frame)
             for [(x_min, y_min), (x_max, y_max)] in in_contours:
                 height = y_max - y_min + 1
                 width = x_max - x_min + 1
-                #print(f'height={height}, width={width}')
-                if _HEALTH_BAR_BOX[0] <= height <= _HEALTH_BAR_BOX[1] and _HEALTH_BAR_BOX[2] <= width <= _HEALTH_BAR_BOX[3]:
+                # print(f'height={height}, width={width}')
+                if _HEALTH_BAR_BOX[0] <= height <= _HEALTH_BAR_BOX[1] and _HEALTH_BAR_BOX[2] <= width <= \
+                        _HEALTH_BAR_BOX[3]:
                     out_contours.append([(x_min, y_min), (x_max, y_max)])
 
             return out_contours
@@ -82,20 +319,20 @@ cv.imwrite('imgs\\_result.jpg', frame)
         def set_positions(in_contours):
             # health bar
             y_min = min([y_min for [(x_min, y_min), (x_max, y_max)] in in_contours])
-            pos = (shift_x_min, shift_y_min+y_min, shift_x_max, shift_y_max+y_min)
-            center = (pos[0]+(pos[2]-pos[0])//2, pos[1]+(pos[3]-pos[1])//2)
+            pos = (shift_x_min, shift_y_min + y_min, shift_x_max, shift_y_max + y_min)
+            center = (pos[0] + (pos[2] - pos[0]) // 2, pos[1] + (pos[3] - pos[1]) // 2)
             out['health_bar'] = (pos, center)
 
         # ON GROUND?
-        shift_x_min, shift_y_min, shift_x_max, shift_y_max = 905, 346, 905+121, 346+9
+        shift_x_min, shift_y_min, shift_x_max, shift_y_max = 905, 346, 905 + 121, 346 + 9
         if execute(): return
 
         # ON HORSE?
-        shift_x_min, shift_y_min, shift_x_max, shift_y_max = 905, 261, 905+121, 261+9
+        shift_x_min, shift_y_min, shift_x_max, shift_y_max = 905, 261, 905 + 121, 261 + 9
         if execute(): return
 
         # IN BUSHES?
-        shift_x_min, shift_y_min, shift_x_max, shift_y_max = 905, 150, 905+121, 450
+        shift_x_min, shift_y_min, shift_x_max, shift_y_max = 905, 150, 905 + 121, 450
         if execute(): return
 
         return f'Cannot find position of bot health bar'
@@ -121,7 +358,7 @@ cv.imwrite('imgs\\_result.jpg', frame)
             y_max = y_min + _BOT_BOX_H_UNMOUNT
 
         pos = (x_min, y_min, x_max, y_max)
-        center = (x_min+(pos[2]-pos[0])//2, y_min+(pos[3]-pos[1])//2)
+        center = (x_min + (pos[2] - pos[0]) // 2, y_min + (pos[3] - pos[1]) // 2)
         out['bounding_box'] = (pos, center)
 
     def get_circle():
@@ -130,21 +367,21 @@ cv.imwrite('imgs\\_result.jpg', frame)
 
         # bot mounted
         if y_hb_min < int(2 * SCREEN_H / 8):
-            center = (x_center, y_center+_BOT_CIRCLE_SHIFT_MOUNT)
-            x_min = center[0]-_BOT_CIRCLE_W//2
-            y_min = center[1]-_BOT_CIRCLE_H//2
-            x_max = center[0]+_BOT_CIRCLE_W//2
-            y_max = center[1]+_BOT_CIRCLE_H//2
+            center = (x_center, y_center + _BOT_CIRCLE_SHIFT_MOUNT)
+            x_min = center[0] - _BOT_CIRCLE_W // 2
+            y_min = center[1] - _BOT_CIRCLE_H // 2
+            x_max = center[0] + _BOT_CIRCLE_W // 2
+            y_max = center[1] + _BOT_CIRCLE_H // 2
         else:
             # bot unmounted = on ground
-            center = (x_center, y_center+_BOT_CIRCLE_SHIFT_UNMOUNT)
-            x_min = center[0]-_BOT_CIRCLE_W//2
-            y_min = center[1]-_BOT_CIRCLE_H//2
-            x_max = center[0]+_BOT_CIRCLE_W//2
-            y_max = center[1]+_BOT_CIRCLE_H//2
+            center = (x_center, y_center + _BOT_CIRCLE_SHIFT_UNMOUNT)
+            x_min = center[0] - _BOT_CIRCLE_W // 2
+            y_min = center[1] - _BOT_CIRCLE_H // 2
+            x_max = center[0] + _BOT_CIRCLE_W // 2
+            y_max = center[1] + _BOT_CIRCLE_H // 2
 
         pos = (x_min, y_min, x_max, y_max)
-        center = (x_min+(pos[2]-pos[0])//2, y_min+(pos[3]-pos[1])//2)
+        center = (x_min + (pos[2] - pos[0]) // 2, y_min + (pos[3] - pos[1]) // 2)
         out['circle'] = (pos, center)
 
     description = get_health_bar()
@@ -177,7 +414,7 @@ for cnt in range(1, 7):
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= res.max())
     if len(loc[0]) == 0:
-        return None, None   # could not find slash position
+        return None, None  # could not find slash position
     x_slash, y_slash = loc[::-1][0][0], loc[::-1][1][0]
 
     # get positions of numbers
@@ -195,14 +432,14 @@ for cnt in range(1, 7):
     out.sort(key=lambda x: x[0])
 
     # create final output values
-    val_current_str = ''.join([str(num) for (x, y, num) in out if x < x_slash])   # numbers before slash
-    val_max_str = ''.join([str(num) for (x, y, num) in out if x > x_slash])   # numbers after slash
+    val_current_str = ''.join([str(num) for (x, y, num) in out if x < x_slash])  # numbers before slash
+    val_max_str = ''.join([str(num) for (x, y, num) in out if x > x_slash])  # numbers after slash
     if not val_current_str.isdigit() or not val_max_str.isdigit():
-        return None, None   # could not detect numbers
+        return None, None  # could not detect numbers
     val_current = int(val_current_str)
     val_max = int(val_max_str)
     if val_current > val_max:
-        return None, None   # error when detecting numbers
+        return None, None  # error when detecting numbers
 
     return val_current, val_max
 
@@ -228,7 +465,7 @@ for cnt in range(1, 5):
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= res.max())
     if len(loc[0]) == 0:
-        return None, None   # could not find slash position
+        return None, None  # could not find slash position
     x_slash, y_slash = loc[::-1][0][0], loc[::-1][1][0]
 
     # get positions of numbers
@@ -246,14 +483,14 @@ for cnt in range(1, 5):
     out.sort(key=lambda x: x[0])
 
     # create final output values
-    val_current_str = ''.join([str(num) for (x, y, num) in out if x < x_slash])   # numbers before slash
-    val_max_str = ''.join([str(num) for (x, y, num) in out if x > x_slash])   # numbers after slash
+    val_current_str = ''.join([str(num) for (x, y, num) in out if x < x_slash])  # numbers before slash
+    val_max_str = ''.join([str(num) for (x, y, num) in out if x > x_slash])  # numbers after slash
     if not val_current_str.isdigit() or not val_max_str.isdigit():
-        return None, None   # could not detect numbers
+        return None, None  # could not detect numbers
     val_current = int(val_current_str)
     val_max = int(val_max_str)
     if val_current > val_max:
-        return None, None   # error when detecting numbers
+        return None, None  # error when detecting numbers
 
     return val_current, val_max
 
@@ -266,9 +503,10 @@ file_path = f'imgs\\detect\\cooldowns.png'
 frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
 print(get_cooldowns(frame))
     """
+
     def get_well_cooldown():
         # get part of image
-        x_mini, y_mini, x_maxi, y_maxi = 182, 1038, 182+34, 1038+17
+        x_mini, y_mini, x_maxi, y_maxi = 182, 1038, 182 + 34, 1038 + 17
         img = in_frame[y_mini:y_maxi, x_mini:x_maxi]
         img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
         # template
@@ -309,7 +547,7 @@ print(get_total_xp_value(frame))
     """
 
     # get part of image
-    x_min, y_min, x_max, y_max = 875, 243, 875+70, 243+18
+    x_min, y_min, x_max, y_max = 875, 243, 875 + 70, 243 + 18
     img = in_frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
@@ -340,7 +578,7 @@ frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
 print(is_bot_hidden(frame))
     """
     # get part of image
-    x_min, y_min, x_max, y_max = 930, 250, 930+60, 250+90
+    x_min, y_min, x_max, y_max = 930, 250, 930 + 60, 250 + 90
     img = in_frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
@@ -366,7 +604,7 @@ frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
 print(is_bot_dead(frame))
     """
     # get part of image
-    x_min, y_min, x_max, y_max = 945, 696, 945+30, 696+30
+    x_min, y_min, x_max, y_max = 945, 696, 945 + 30, 696 + 30
     img = in_frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
@@ -392,18 +630,18 @@ frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
 print(get_bot_icon(frame))
     """
     # get part of image
-    x_min, y_min, x_max, y_max = 1558, 863, 1558+366, 863+183
+    x_min, y_min, x_max, y_max = 1558, 863, 1558 + 366, 863 + 183
     img = in_frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get positions of template
     threshold = 0.62
     template = template_bot_icon
-    x_shift, y_shit = template.shape[1]//2, template.shape[0]//2
+    x_shift, y_shit = template.shape[1] // 2, template.shape[0] // 2
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= threshold)
     if len(loc[0]) == 0:
-        return None, None   # could not find icon's position
+        return None, None  # could not find icon's position
     else:
         x_out, y_out = x_min + loc[::-1][0][0] + x_shift, y_min + loc[::-1][1][0] + y_shit
         return x_out, y_out
@@ -419,17 +657,17 @@ print(verify_bot_icon_place(frame, 'gate'))
     """
     x, y = get_bot_icon_position(in_frame)
     if None in [x, y]:
-        return False    # could not find icon's position
+        return False  # could not find icon's position
 
     if in_place == 'gate':
-        x_min, y_min, x_max, y_max = 1651, 899, 1651+6, 899+17
+        x_min, y_min, x_max, y_max = 1651, 899, 1651 + 6, 899 + 17
         if x_min <= x <= x_max and y_min <= y <= y_max:
             return True
         else:
             return False
 
     if in_place == 'bush':
-        x_min, y_min, x_max, y_max = 1712, 873, 1712+23, 873+3
+        x_min, y_min, x_max, y_max = 1712, 873, 1712 + 23, 873 + 3
         if x_min <= x <= x_max and y_min <= y <= y_max:
             return True
         else:
@@ -446,7 +684,7 @@ frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
 print(get_well_position(frame))
     """
     # get part of image
-    x_min, y_min, x_max, y_max = 550, 250, 550+350, 250+300
+    x_min, y_min, x_max, y_max = 550, 250, 550 + 350, 250 + 300
     img = in_frame[y_min:y_max, x_min:x_max]
     hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
 
@@ -457,13 +695,14 @@ print(get_well_position(frame))
     mask = cv.morphologyEx(mask, cv.MORPH_OPEN, kernel, iterations=2)
 
     # get circle
-    circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, dp=1.2, minDist=999, param1=300, param2=10, minRadius=12, maxRadius=25)  # param2 - minimal number of edges
+    circles = cv.HoughCircles(mask, cv.HOUGH_GRADIENT, dp=1.2, minDist=999, param1=300, param2=10, minRadius=12,
+                              maxRadius=25)  # param2 - minimal number of edges
     if circles is not None and circles.shape == (1, 1, 3):
         circle_x, circle_y, circle_r = int(circles[0][0][0]), int(circles[0][0][1]), int(circles[0][0][2])
         out_x, out_y = x_min + circle_x, y_min + circle_y
         return out_x, out_y
     else:
-        return None, None   # could not find circle
+        return None, None  # could not find circle
 
     # old code - calculate fill level
     """
@@ -511,6 +750,7 @@ print(get_well_position(frame))
 class Actions(dict):
     def __init__(self):
         args = tuple([{
+            'basic_attack': ActionBasicAttack(),
             'use_well': ActionUseWell(),
             'hide_in_bushes': ActionHideInBushes(),
             'hide_behind_gate': ActionHideBehindGate(),
@@ -526,9 +766,9 @@ class Actions(dict):
             self.current_action = in_action_name
             self[self.current_action].start()
 
-    def process(self, in_frame):
+    def process(self, *args, **kwargs):
         if self.current_action is not None:
-            self[self.current_action].process(in_frame)
+            self[self.current_action].process(*args, **kwargs)
             if self[self.current_action].result in [-1, 1]:
                 # reset action
                 self.printout()
@@ -563,12 +803,64 @@ class Action:
 
     def printout(self):
         if len(self.steps) > 0 and self.step_idx is not None:
-            text = f'Action={self.__class__.__name__.replace("Action","")}, ' \
+            text = f'Action={self.__class__.__name__.replace("Action", "")}, ' \
                    f'Step={self.steps[self.step_idx]}, ' \
                    f'Result={self.result}'
             if len(self.description) > 0:
                 text += f', Description={self.description}'
             print(text)
+
+
+class ActionBasicAttack(Action):
+    def __init__(self):
+        super().__init__()
+        self.bot_pos = (SCREEN_W//2, SCREEN_H//2)   # (x,y)
+        self.steps = [
+            'at_range',
+            'click_attack'
+        ]
+        self.hidden_values = [None] * 10
+        self.t0 = None
+        self.timeout = 30  # [sec]
+
+    def start(self):
+        super().start()
+        self.step_idx = 0
+
+    def process(self, *args, **kwargs):
+        if self.result != [-1, 1]:
+            minions = kwargs.get('minions')
+            # get the position of the closest, red minion => target
+            if minions['red']:
+                distances = []
+                for position in minions['red']:
+                    distances.append((get_distance_between_points(self.bot_pos, position), position))
+                distances.sort()
+                distance, target = distances[0]  # float dist, (x, y)
+                print(distance)
+
+                if self.steps[self.step_idx] == 'at_range':   # evaluate if bot is in range to attack target position
+                    if distance > 250:
+                        # bot needs to move closer to target position, to be in range
+                        new_pos = self.bot_pos[0] + (target[0]-self.bot_pos[0])//2, \
+                            self.bot_pos[1] + (target[1] - self.bot_pos[1]) // 2
+                        pyautogui.moveTo(*new_pos)
+                        pyautogui.click(button='right')
+                    else:
+                        self.step_idx += 1
+
+                if self.steps[self.step_idx] == 'click_attack':
+                    pyautogui.moveTo(target)
+                    #pyautogui.click(button='left')
+                    pyautogui.press('a')
+                    self.set_result(1, '')  # finished
+
+            # timeout?
+            if self.t0 is None:
+                self.t0 = time.time()
+            if time.time() - self.t0 >= self.timeout:
+                self.set_result(-1, f'Bot did not attack target within {self.timeout} sec.')
+                self.t0 = None
 
 
 class ActionUseWell(Action):
@@ -583,22 +875,23 @@ class ActionUseWell(Action):
         ]
         self.well_x, self.well_y = None, None
         self.t0 = None
-        self.timeout = 30    # [sec]
-        self.timeout_short = 5    # [sec]
+        self.timeout = 30  # [sec]
+        self.timeout_short = 5  # [sec]
 
     def start(self):
         super().start()
         self.step_idx = 0
 
-    def process(self, in_frame):
+    def process(self, *args, **kwargs):
         if self.result != [-1, 1]:
+            frame = kwargs.get('frame')
             if self.steps[self.step_idx] == 'click_gate':
                 pyautogui.moveTo(1654, 912)
                 pyautogui.click(button='right')
                 self.step_idx += 1
 
             if self.steps[self.step_idx] == 'at_gate':
-                if is_bot_icon_in_place(in_frame, 'gate'):
+                if is_bot_icon_in_place(frame, 'gate'):
                     self.step_idx += 1
                     self.t0 = None
                 else:
@@ -610,7 +903,7 @@ class ActionUseWell(Action):
                         self.t0 = None
 
             if self.steps[self.step_idx] == 'find_well':
-                self.well_x, self.well_y = get_well_position(in_frame)
+                self.well_x, self.well_y = get_well_position(frame)
                 if None not in [self.well_x, self.well_y]:
                     self.step_idx += 1
                 else:
@@ -623,7 +916,7 @@ class ActionUseWell(Action):
                 self.step_idx += 1
 
             if self.steps[self.step_idx] == 'well_cooldown':
-                cooldowns = get_cooldowns(in_frame)
+                cooldowns = get_cooldowns(frame)
                 if cooldowns['well']:
                     self.set_result(1, '')
                     self.t0 = None
@@ -644,23 +937,24 @@ class ActionHideInBushes(Action):
             'at_bushes',
             'hidden'
         ]
-        self.hidden_values = [None]*10
+        self.hidden_values = [None] * 10
         self.t0 = None
-        self.timeout = 30    # [sec]
+        self.timeout = 30  # [sec]
 
     def start(self):
         super().start()
         self.step_idx = 0
 
-    def process(self, in_frame):
+    def process(self, *args, **kwargs):
         if self.result != [-1, 1]:
+            frame = kwargs.get('frame')
             if self.steps[self.step_idx] == 'click_bushes':
                 pyautogui.moveTo(1722, 879)
                 pyautogui.click(button='right')
                 self.step_idx += 1
 
             if self.steps[self.step_idx] == 'at_bushes':
-                if is_bot_icon_in_place(in_frame, 'bush'):
+                if is_bot_icon_in_place(frame, 'bush'):
                     self.step_idx += 1
                     self.t0 = None
                 else:
@@ -674,7 +968,7 @@ class ActionHideInBushes(Action):
             if self.steps[self.step_idx] == 'hidden':
                 try:
                     idx = self.hidden_values.index(None)
-                    val = is_bot_hidden(in_frame)
+                    val = is_bot_hidden(frame)
                     if val:
                         self.set_result(1, '')  # bot is hidden
                     self.hidden_values[idx] = val
@@ -689,15 +983,16 @@ class ActionHideBehindGate(Action):
             'click_gate',
             'at_gate'
         ]
-        self.diff_values = [None]*10
+        self.diff_values = [None] * 10
         self.t0 = None
-        self.timeout = 30    # [sec]
+        self.timeout = 30  # [sec]
 
     def start(self):
         super().start()
         self.step_idx = 0
 
-    def process(self, in_frame):
+    def process(self, *rgs, **kwargs):
+        frame = kwargs.get('frame')
         if self.result != [-1, 1]:
             if self.steps[self.step_idx] == 'click_gate':
                 pyautogui.moveTo(1654, 912)
@@ -705,22 +1000,23 @@ class ActionHideBehindGate(Action):
                 self.step_idx += 1
 
             if self.steps[self.step_idx] == 'at_gate':
-                if is_bot_icon_in_place(in_frame, 'gate'):
+                if is_bot_icon_in_place(frame, 'gate'):
                     self.set_result(1, '')  # finished
                     self.t0 = None
                 else:
-                    bot_x, bot_y = get_bot_icon_position(in_frame)
+                    bot_x, bot_y = get_bot_icon_position(frame)
                     if None not in [bot_x, bot_y]:
                         try:
                             idx = self.diff_values.index(None)
-                            val = abs(1654-bot_x) + abs(912-bot_y)
+                            val = abs(1654 - bot_x) + abs(912 - bot_y)
                             self.diff_values[idx] = val
                         except ValueError:
                             # all values are gathered
                             if self.diff_values[-1] >= self.diff_values[0]:
-                                self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
+                                self.set_result(-1,
+                                                f'Bot is not moving towards gate since {len(self.diff_values)} frames')
                                 self.t0 = None
-                            self.diff_values = [None]*len(self.diff_values)    # reset
+                            self.diff_values = [None] * len(self.diff_values)  # reset
                     # timeout?
                     if self.t0 is None:
                         self.t0 = time.time()
@@ -738,16 +1034,17 @@ class ActionUseSpellD(Action):
             'spell_cooldown'
         ]
         self.t0 = None
-        self.timeout = 5    # [sec]
+        self.timeout = 5  # [sec]
 
     def start(self):
         super().start()
         self.step_idx = 0
 
-    def process(self, in_frame):
+    def process(self, *args, **kwargs):
         if self.result != [-1, 1]:
+            frame = kwargs.get('frame')
             if self.steps[self.step_idx] == 'press_button':
-                pyautogui.moveTo(SCREEN_W//2, SCREEN_H//2)
+                pyautogui.moveTo(SCREEN_W // 2, SCREEN_H // 2)
                 pyautogui.click(button='left')
                 pyautogui.press('d')
                 self.step_idx += 1
@@ -755,7 +1052,7 @@ class ActionUseSpellD(Action):
             if self.steps[self.step_idx] == 'spell_blocked':
                 # get part of image
                 x_min, y_min, x_max, y_max = 1006, 1010, 1006 + 144, 1010 + 40
-                img = in_frame[y_min:y_max, x_min:x_max]
+                img = frame[y_min:y_max, x_min:x_max]
                 img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
                 # get positions of template
                 threshold = 0.8
@@ -775,7 +1072,7 @@ class ActionUseSpellD(Action):
                         self.t0 = None
 
             if self.steps[self.step_idx] == 'spell_cooldown':
-                cooldowns = get_cooldowns(in_frame)
+                cooldowns = get_cooldowns(frame)
                 if cooldowns['D']:
                     self.set_result(1, '')
                     self.t0 = None
@@ -798,32 +1095,33 @@ class ActionEscapeBehindGate(Action):
             'click_gate',
             'at_gate'
         ]
-        self.diff_values = [None]*10
+        self.diff_values = [None] * 10
         self.t0 = None
-        self.timeout = 30    # [sec]
-        self.timeout_short = 5    # [sec]
+        self.timeout = 30  # [sec]
+        self.timeout_short = 5  # [sec]
 
     def start(self):
         super().start()
         self.step_idx = 0
 
-    def process(self, in_frame):
+    def process(self, *args, **kwargs):
         if self.result != [-1, 1]:
+            frame = kwargs.get('frame')
             if self.steps[self.step_idx] == 'press_button':
                 # get mouse position between bot and gate
-                bot_icon_pos = get_bot_icon_position(in_frame)
+                bot_icon_pos = get_bot_icon_position(frame)
                 if None in bot_icon_pos:
                     self.set_result(-1, f'Could not detect bot icon position')
                     return
-                in_hsv = cv.cvtColor(in_frame, cv.COLOR_BGR2HSV)
+                in_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
                 positions, description = get_bot_positions(in_hsv)
                 if positions is None:
                     self.set_result(-1, description)
                     return
                 circle_pos = positions['circle'][1]
                 gate_icon_pos = (1654, 912)
-                vector = (gate_icon_pos[0]-bot_icon_pos[0], gate_icon_pos[1]-bot_icon_pos[1])
-                mouse_pos = (circle_pos[0]+vector[0], circle_pos[1]+vector[1])
+                vector = (gate_icon_pos[0] - bot_icon_pos[0], gate_icon_pos[1] - bot_icon_pos[1])
+                mouse_pos = (circle_pos[0] + vector[0], circle_pos[1] + vector[1])
                 # button
                 pyautogui.moveTo(mouse_pos[0], mouse_pos[1])
                 pyautogui.click(button='left')
@@ -839,7 +1137,7 @@ class ActionEscapeBehindGate(Action):
                     self.t0 = None
 
             if self.steps[self.step_idx] == 'spell_cooldown':
-                cooldowns = get_cooldowns(in_frame)
+                cooldowns = get_cooldowns(frame)
                 if cooldowns['E']:
                     self.step_idx += 1
                     self.t0 = None
@@ -857,30 +1155,29 @@ class ActionEscapeBehindGate(Action):
                 self.step_idx += 1
 
             if self.steps[self.step_idx] == 'at_gate':
-                if is_bot_icon_in_place(in_frame, 'gate'):
+                if is_bot_icon_in_place(frame, 'gate'):
                     self.set_result(1, '')  # finished
                     self.t0 = None
                 else:
-                    bot_x, bot_y = get_bot_icon_position(in_frame)
+                    bot_x, bot_y = get_bot_icon_position(frame)
                     if None not in [bot_x, bot_y]:
                         try:
                             idx = self.diff_values.index(None)
-                            val = abs(1654-bot_x) + abs(912-bot_y)
+                            val = abs(1654 - bot_x) + abs(912 - bot_y)
                             self.diff_values[idx] = val
                         except ValueError:
                             # all values are gathered
                             if self.diff_values[-1] >= self.diff_values[0]:
-                                self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
+                                self.set_result(-1,
+                                                f'Bot is not moving towards gate since {len(self.diff_values)} frames')
                                 self.t0 = None
-                            self.diff_values = [None]*len(self.diff_values)    # reset
+                            self.diff_values = [None] * len(self.diff_values)  # reset
                     # timeout?
                     if self.t0 is None:
                         self.t0 = time.time()
                     if time.time() - self.t0 >= self.timeout:
                         self.set_result(-1, f'Bot did not reach gate within {self.timeout} sec.')
                         self.t0 = None
-
-
 
 
 def action_use_well():
@@ -894,6 +1191,8 @@ def action_use_well():
 
 action = None
 clicked = None
+
+
 def process_action(in_frame, in_action):
     global action, clicked
 
@@ -919,7 +1218,6 @@ def process_action(in_frame, in_action):
         if is_bot_icon_in_place(in_frame, 'bush'):
             finished = True  # finished action
 
-
     if finished:
         action = None
         clicked = None
@@ -927,18 +1225,14 @@ def process_action(in_frame, in_action):
     return action, clicked
 
 
+# import cv2 as cv
+# from image_objects_lib import ImageObjects
+# from tracker_lib import TrackerClass
+# from painter_lib import PainterClass
 
-
-
-
-#import cv2 as cv
-#from image_objects_lib import ImageObjects
-#from tracker_lib import TrackerClass
-#from painter_lib import PainterClass
-
-#ImgObjs = ImageObjects()
-#Tracker = TrackerClass()
-#Painter = PainterClass()
+# ImgObjs = ImageObjects()
+# Tracker = TrackerClass()
+# Painter = PainterClass()
 
 """
 class MinionClass:
@@ -960,9 +1254,6 @@ inputs = [
 ]
 cnt = 0
 """
-
-
-
 
 """
 def detect_objects(img):

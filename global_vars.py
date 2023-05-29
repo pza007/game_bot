@@ -6,6 +6,13 @@ import numpy as np
 # -------------------------------------------------
 SCREEN_W = 1920
 SCREEN_H = 1080
+# Skip areas (do not detect bot or minions inside these areas)
+SKIP_AREA_TOP_MIDDLE =    [(630, 0), (1200, 77)]
+SKIP_AREA_BOTTOM_LEFT =   [(0, 894), (432, 1080)]
+SKIP_AREA_BOTTOM_MIDDLE = [(657, 982), (1263, 1080)]
+SKIP_AREA_BOTTOM_RIGHT =  [(1565, 872), (1916, 1036)]
+SKIP_AREAS = [SKIP_AREA_TOP_MIDDLE, SKIP_AREA_BOTTOM_LEFT, SKIP_AREA_BOTTOM_MIDDLE, SKIP_AREA_BOTTOM_RIGHT]
+
 
 ###################################################
 #        TEMPLATES
@@ -50,12 +57,6 @@ template_blocked_symbol = cv.imread(f'imgs\\templates\\blocked_symbol.png', cv.I
 ###################################################
 #        GENERAL
 # -------------------------------------------------
-# Skip areas (do not detect object inside these areas)
-_SKIP_AREA_TOP_MIDDLE =    [(630, 0), (1200, 77)]
-_SKIP_AREA_BOTTOM_LEFT =   [(0, 894), (432, 1080)]
-_SKIP_AREA_BOTTOM_MIDDLE = [(657, 982), (1263, 1080)]
-_SKIP_AREA_BOTTOM_RIGHT =  [(1565, 872), (1916, 1036)]
-_SKIP_AREAS = [_SKIP_AREA_TOP_MIDDLE, _SKIP_AREA_BOTTOM_LEFT, _SKIP_AREA_BOTTOM_MIDDLE, _SKIP_AREA_BOTTOM_RIGHT]
 
 
 

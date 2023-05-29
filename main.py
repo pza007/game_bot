@@ -16,13 +16,27 @@ a = functions.Actions()
 #   When dead -> check total xp and start from step 1)
 # ----------------------------------------------------------------------------------------------------------
 
+# TODO ellipse:
+# shape:
+#   (for Q attack!)
+#       center= 480, 172
+#       width = 960, height = 770
+#   (for W attack!)
+#       center= 521, 193
+#       width = 878, height = 709
+# distance to target:
+#   https://stackoverflow.com/questions/40193867/distance-from-point-to-ellipse
+
+# TODO circle:
+#   calculate REAL new_pos for cursor for 'basic attack' (bot_pos + diff_distances)
+
 # TODO: actions
-#   - move & basic attack (A key)
 #   - move & skill attack (Q, W keys)
 #   - move & collect globes
 
 
 # Implemented:
+# 'basic_attack' (move & attack closest red minion)
 # 'use_well'
 # 'hide_in_bushes'
 # 'hide_behind_gate
@@ -36,6 +50,7 @@ loop_time = time.time()
 while(True):
     # get screenshot
     frame = window.get_screenshot()
+    frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
     #screenshot = cv.imread("imgs\\in_img.png", cv.IMREAD_UNCHANGED)
     #cv.imshow('Computer Vision', screenshot)
 
@@ -50,10 +65,13 @@ while(True):
     #    out_x, out_y = get_well_position(frame)
     #    print('well:', out_x, out_y)
 
+    minions = get_minions_positions(frame, frame_hsv)
+
 
     if 2 < time.time() - t0 < 2.5:
-        a.start('escape_behind_gate')
-    a.process(frame)
+        a.start('basic_attack')
+
+    a.process(minions=minions)
     a.printout()
 
     if time.time() - t0 > 40:
