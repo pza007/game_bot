@@ -113,21 +113,21 @@ print(get_minions_positions(img, hsv))
                     cnt_top, cnt_bottom = 0, 0
                     for x in range(b_x_min, b_x_max + 1):
                         # top border
-                        [b, g, r, a] = in_img[b_y_min][x]  # B,G,R,A
+                        b, g, r, *a = in_img[b_y_min][x]  # B,G,R,A
                         if b <= b_thr and g <= g_thr and r <= r_thr:
                             cnt_top += 1
                         # bottom border
-                        [b, g, r, a] = in_img[b_y_max][x]
+                        b, g, r, *a = in_img[b_y_max][x]
                         if b <= b_thr and g <= g_thr and r <= r_thr:
                             cnt_bottom += 1
                     cnt_left, cnt_right = 0, 0
                     for y in range(b_y_min, b_y_max + 1):
                         # left border
-                        [b, g, r, a] = in_img[y][b_x_min]
+                        b, g, r, *a = in_img[y][b_x_min]
                         if b <= b_thr and g <= g_thr and r <= r_thr:
                             cnt_left += 1
                         # right border
-                        [b, g, r, a] = in_img[y][b_x_max]
+                        b, g, r, *a = in_img[y][b_x_max]
                         if b <= b_thr and g <= g_thr and r <= r_thr:
                             cnt_right += 1
 
@@ -819,7 +819,110 @@ class ActionBasicAttack(Action):
             'at_range',
             'click_attack'
         ]
-        self.hidden_values = [None] * 10
+        self.t0 = None
+        self.timeout = 30  # [sec]
+
+    def start(self):
+        super().start()
+        self.step_idx = 0
+
+    def process(self, *args, **kwargs):
+        if self.result != [-1, 1]:
+            minions = kwargs.get('minions')
+            # get the position of the closest, red minion => target
+            if minions['red']:
+                distances = []
+                for position in minions['red']:
+                    distances.append((get_distance_between_points(self.bot_pos, position), position))
+                distances.sort()
+                distance, target = distances[0]  # float dist, (x, y)
+                print(distance)
+
+                if self.steps[self.step_idx] == 'at_range':   # evaluate if bot is in range to attack target position
+                    if distance > 250:
+                        # bot needs to move closer to target position, to be in range
+                        new_pos = self.bot_pos[0] + (target[0]-self.bot_pos[0])//2, \
+                            self.bot_pos[1] + (target[1] - self.bot_pos[1]) // 2
+                        pyautogui.moveTo(*new_pos)
+                        pyautogui.click(button='right')
+                    else:
+                        self.step_idx += 1
+
+                if self.steps[self.step_idx] == 'click_attack':
+                    pyautogui.moveTo(target)
+                    #pyautogui.click(button='left')
+                    pyautogui.press('a')
+                    self.set_result(1, '')  # finished
+
+            # timeout?
+            if self.t0 is None:
+                self.t0 = time.time()
+            if time.time() - self.t0 >= self.timeout:
+                self.set_result(-1, f'Bot did not attack target within {self.timeout} sec.')
+                self.t0 = None
+
+def fun(*args, **kwargs):
+    from shapely import wkt
+    SPLASH_RADIUS = 150  # px
+
+    minions = kwargs.get('minions')
+    bot = kwargs.get('bot') # TODO
+    if minions['red']:
+        # filter the positions that have the most neighbours within radius range
+        neighbours = {pos: [] for pos in minions['red']}
+        max_num_neighbours = -1
+        for i in range(len(minions['red'])):
+            for j in range(len(minions['red'])):
+                if i != j:
+                    dist = get_distance_between_points(minions['red'][i], minions['red'][j])
+                    if dist <= SPLASH_RADIUS:
+                        neighbours[minions['red'][i]].append(minions['red'][j])
+                        if len(neighbours[minions['red'][i]]) > max_num_neighbours:
+                            max_num_neighbours = len(neighbours[minions['red'][i]])
+
+        # no neighbours? -> return position that is closest to bot
+        if max_num_neighbours == 0:
+            bot_pos = bot['bounding_box'][1]
+            return min([(get_distance_between_points(bot_pos, pos), pos) for pos in minions['red']])[1]
+
+        for key, value in neighbours.items():
+            if len(value) == max_num_neighbours:
+                positions = [key] + value
+                break
+
+        # 1 neighbour? -> return point between 2 positions
+        if max_num_neighbours == 1:
+            x1, y1 = positions[0]
+            x2, y2 = positions[1]
+            return x1+(x1-x2), y1+(y1-y2)
+
+        # 2 or more neighbours? -> return center point of polygon
+        # TODO - poprawic zeby srodek byl wyliczany z obiektu ktory jest podobny do prostokata a nie dowolnego ksztaltu!!
+        polygon_str = 'POLYGON(('
+        for position in positions:
+            polygon_str += str(position[0]) + ' ' + str(position[1]) + ' ,'
+        polygon_str += str(positions[0][0]) + ' ' + str(positions[0][1]) + '))'
+        polygon = wkt.loads(polygon_str)
+        point_center = int(polygon.centroid.x), int(polygon.centroid.y)
+        print(point_center)
+        print(get_distance_between_points(point_center, minions['red'][0]))
+
+        a = 1
+
+    # p1 = wkt.loads("POLYGON((-171379.35 5388068.23,-171378.8 5388077.59,
+    #                 -171368.44 5388076.82,-171368.89 5388067.46,
+    #                 -171379.35 5388068.23))")
+    # print(p1.centroid.wkt)
+
+#TODO
+class ActionQAttack(Action):
+    def __init__(self):
+        super().__init__()
+        self.bot_pos = (SCREEN_W//2, SCREEN_H//2)   # (x,y)
+        self.steps = [
+            'at_range',
+            'click_attack'
+        ]
         self.t0 = None
         self.timeout = 30  # [sec]
 

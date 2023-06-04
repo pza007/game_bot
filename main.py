@@ -5,6 +5,12 @@ from window_capture import WindowCapture
 from functions import *
 import numpy as np
 
+file_path = f'imgs\\attack\\attack_q.png'
+frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+minions = get_minions_positions(frame, frame_hsv)
+fun(minions=minions)
+
 a = functions.Actions()
 
 # TODO: plan for game
@@ -26,9 +32,6 @@ a = functions.Actions()
 #       width = 878, height = 709
 # distance to target:
 #   https://stackoverflow.com/questions/40193867/distance-from-point-to-ellipse
-
-# TODO circle:
-#   calculate REAL new_pos for cursor for 'basic attack' (bot_pos + diff_distances)
 
 # TODO: actions
 #   - move & skill attack (Q, W keys)
