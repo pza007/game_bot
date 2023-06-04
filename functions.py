@@ -1,10 +1,22 @@
 import pyautogui
 from global_vars import *
 import time
+import math
+
+from itertools import product, combinations
 
 
 def get_distance_between_points(point1, point2):
     return np.linalg.norm(np.array((point1[0], point1[1])) - np.array((point2[0], point2[1])))
+
+
+def get_centroid_point(list_of_points: list) -> tuple:
+    # link: https://stackoverflow.com/questions/23020659/fastest-way-to-calculate-the-centroid-of-a-set-of-coordinate-tuples-in-python-wi
+    arr = np.array(list_of_points)
+    length = arr.shape[0]
+    sum_x = np.sum(arr[:, 0])
+    sum_y = np.sum(arr[:, 1])
+    return int(sum_x / length), int(sum_y / length)
 
 
 def point_inside_polygon(x, y, poly):
@@ -24,6 +36,28 @@ def point_inside_polygon(x, y, poly):
     return inside
 
 
+def point_inside_ellipse(point, point_center, ellipse_type):
+    ELLIPSE_Q_WITH = 222
+    ELLIPSE_Q_HEIGHT = 180
+    ELLIPSE_W_WITH = 385
+    ELLIPSE_W_HEIGHT = 305
+
+    if ellipse_type == 'Q':
+        a = ELLIPSE_Q_WITH // 2
+        b = ELLIPSE_Q_HEIGHT // 2
+    else:  # 'W'
+        a = ELLIPSE_W_WITH // 2
+        b = ELLIPSE_W_HEIGHT // 2
+    phi = math.atan2(a * point[1], b * point[0])
+    point_on_ellipse = (point_center[0] + a * math.cos(phi), point_center[1] + b * math.sin(phi))
+    dist_to_point = get_distance_between_points(point_center, point)
+    dist_to_point_on_ellipse = get_distance_between_points(point_center, point_on_ellipse)
+    if dist_to_point <= dist_to_point_on_ellipse:
+        return True
+    else:
+        return False
+
+
 def get_minions_positions(in_img, in_hsv):
     """
     out: [dict] {color: [(x_center, y_center), ...] }
@@ -33,6 +67,7 @@ img = window.get_screenshot()
 hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
 print(get_minions_positions(img, hsv))
     """
+
     def get_health_bars(in_color):
         HB_COLOR_THR_RED = [np.array([150, 170, 80]), np.array([190, 255, 230])]
         HB_COLOR_THR_BLUE = [np.array([90, 120, 90]), np.array([120, 220, 255])]
@@ -45,16 +80,19 @@ print(get_minions_positions(img, hsv))
             # set color thresholds
             if in_color == 'red':
                 thr = HB_COLOR_THR_RED
-            else:   # 'blue'
+            else:  # 'blue'
                 thr = HB_COLOR_THR_BLUE
             # create mask, based on thresholds
             return cv.inRange(in_hsv, thr[0], thr[1])
+
         def transform_mask(in_mask):
             kernel = np.ones((3, 3), np.uint8)
             result = cv.morphologyEx(in_mask, cv.MORPH_OPEN, kernel)
             return result
+
         def get_contours(in_mask):
             return cv.findContours(in_mask, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+
         def filter_1(in_contours):
             # filter contours with 4 points (rectangle)
             out_contours = []
@@ -66,6 +104,7 @@ print(get_minions_positions(img, hsv))
                     y_max = max([_contour[0][1] for _contour in contour])  # point Y
                     out_contours.append((x_min, y_min, x_max, y_max))
             return out_contours
+
         def filter_2(in_contours):
             # filter contours with correct dimensions
             out_contours = []
@@ -75,6 +114,7 @@ print(get_minions_positions(img, hsv))
                 if height == HB_BOX_H and HB_BOX_MIN_W <= width <= HB_BOX_MAX_W:
                     out_contours.append((x_min, y_min, x_max, y_max))
             return out_contours
+
         def filter_3(in_contours):
             # filter contours located outside skip areas
             out_contours = []
@@ -92,6 +132,7 @@ print(get_minions_positions(img, hsv))
                 if success:
                     out_contours.append((x_min, y_min, x_max, y_max))
             return out_contours
+
         def filter_4(in_contours):
             # filter contours with black border outside
             out_contours = []
@@ -152,31 +193,31 @@ print(get_minions_positions(img, hsv))
             contours, _ = get_contours(mask)
             img = copy.deepcopy(in_img)
             for contour in contours:
-               x_min = min([_contour[0][0] for _contour in contour])  # point X
-               x_max = max([_contour[0][0] for _contour in contour])  # point X
-               y_min = min([_contour[0][1] for _contour in contour])  # point Y
-               y_max = max([_contour[0][1] for _contour in contour])  # point Y
-               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+                x_min = min([_contour[0][0] for _contour in contour])  # point X
+                x_max = max([_contour[0][0] for _contour in contour])  # point X
+                y_min = min([_contour[0][1] for _contour in contour])  # point Y
+                y_max = max([_contour[0][1] for _contour in contour])  # point Y
+                cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output4.jpg', img)
             contours = filter_1(contours)
             img = copy.deepcopy(in_img)
             for (x_min, y_min, x_max, y_max) in contours:
-               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+                cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output5.jpg', img)
             contours = filter_2(contours)
             img = copy.deepcopy(in_img)
             for (x_min, y_min, x_max, y_max) in contours:
-               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+                cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output6.jpg', img)
             contours = filter_3(contours)
             img = copy.deepcopy(in_img)
             for (x_min, y_min, x_max, y_max) in contours:
-               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+                cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output7.jpg', img)
             contours = filter_4(contours)
             img = copy.deepcopy(in_img)
             for (x_min, y_min, x_max, y_max) in contours:
-               cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
+                cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output8.jpg', img)
 
         mask = get_mask()
@@ -195,10 +236,10 @@ print(get_minions_positions(img, hsv))
         MN_BOX_H = 73
         f_debug = False
 
-        out = {}    # {color: [(x,y), ...] }
+        out = {}  # {color: [(x,y), ...] }
         for color, list_of_positions in in_dict.items():
             new_list = []
-            for positions in list_of_positions:     # (x_min, y_min, x_max, y_max)
+            for positions in list_of_positions:  # (x_min, y_min, x_max, y_max)
 
                 x_hb_min = positions[0]
                 y_hb_min = positions[1]
@@ -213,7 +254,7 @@ print(get_minions_positions(img, hsv))
 
                 x_new = x_min + (x_max - x_min) // 2
                 y_new = y_min + (y_max - y_min) // 2
-                new_list.append((x_new, y_new)) # (x,y) of center
+                new_list.append((x_new, y_new))  # (x,y) of center
 
             out[color] = new_list
 
@@ -223,9 +264,9 @@ print(get_minions_positions(img, hsv))
             for color, list_of_points in out.items():
                 for (x, y) in list_of_points:
                     if color == 'red':
-                        cv.rectangle(img, (x-2, y-2), (x+2, y+2), (0, 0, 255), 2)
-                    else:   # blue
-                        cv.rectangle(img, (x-2, y-2), (x+2, y+2), (255, 0, 0), 2)
+                        cv.rectangle(img, (x - 2, y - 2), (x + 2, y + 2), (0, 0, 255), 2)
+                    else:  # blue
+                        cv.rectangle(img, (x - 2, y - 2), (x + 2, y + 2), (255, 0, 0), 2)
                 cv.imwrite(f'imgs\\_output_{color}.jpg', img)
 
         return out
@@ -233,7 +274,7 @@ print(get_minions_positions(img, hsv))
     out = {}  # {color: [(x_min, y_min, x_max, y_max), ...] }
     for color in ['red', 'blue']:
         out[color] = get_health_bars(color)
-    out = get_points(out)   # {color: [(x_center, y_center), ...] }
+    out = get_points(out)  # {color: [(x_center, y_center), ...] }
 
     return out
 
@@ -747,37 +788,90 @@ print(get_well_position(frame))
     """
 
 
-class Actions(dict):
-    def __init__(self):
-        args = tuple([{
-            'basic_attack': ActionBasicAttack(),
-            'use_well': ActionUseWell(),
-            'hide_in_bushes': ActionHideInBushes(),
-            'hide_behind_gate': ActionHideBehindGate(),
-            'escape_behind_gate': ActionEscapeBehindGate(),
-            'use_spell_d': ActionUseSpellD()
-        }])
-        super().__init__(*args, **{})
+def get_center_point_for_spell(minions: dict, bot: dict, spell_type: str, **kwargs) -> tuple:
+    """
+    out: (x, y)
 
-        self.current_action = None
+    - get points that are close to each other
+    - calculate all centroids for 2,3,4,5... points
+    - choose center point of centroid that ellipse includes the most of points
 
-    def start(self, in_action_name):
-        if self.current_action is None:
-            self.current_action = in_action_name
-            self[self.current_action].start()
+file_path = f'imgs\\attack\\attack_q.png'
+frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+minions = get_minions_positions(frame, frame_hsv)
+bot, desc = get_bot_positions(frame_hsv)
+print(get_center_point_for_spell(minions, bot, 'Q', frame=frame))
+    """
+    def get_points(in_points):
+        """ get the group of points with most points that are close to each other (max_dist == ellipse width//2) """
+        if spell_type == 'Q':
+            ELLIPSE_WITH = 222
+        else:   # spell_type == 'W'
+            ELLIPSE_WITH = 385
 
-    def process(self, *args, **kwargs):
-        if self.current_action is not None:
-            self[self.current_action].process(*args, **kwargs)
-            if self[self.current_action].result in [-1, 1]:
-                # reset action
-                self.printout()
-                self[self.current_action].__init__()
-                self.current_action = None
+        tups = [sorted(sub) for sub in product(in_points, repeat=2) if
+                get_distance_between_points(*sub) <= ELLIPSE_WITH // 2]
 
-    def printout(self):
-        if self.current_action is not None:
-            self[self.current_action].printout()
+        res_dict = {point: {point} for point in in_points}
+        out_points = []
+        for tup1, tup2 in tups:
+            res_dict[tup1] |= res_dict[tup2]
+            res_dict[tup2] = res_dict[tup1]
+            for val in [tup1, tup2]:
+                if len(res_dict[val]) > len(out_points):
+                    out_points = res_dict[val]
+
+        return list(out_points)
+
+    f_debug = False
+
+    # get points
+    points = get_points(minions['red'])
+    #   1 point -> return point that is closest to bot
+    if len(points) == 1:
+        bot_pos = bot['bounding_box'][1]
+        return min((get_distance_between_points(bot_pos, pos), pos) for pos in minions['red'])[1]
+    #   2 points -> return point between them
+    if len(points) == 2:
+        (x1, y1), (x2, y2) = points
+        return x1 + (x1 - x2), y1 + (y1 - y2)
+
+    # get centroids
+    centroids = set()
+    for num_tuples in range(2, len(points) + 1):
+        for obj in combinations(points, num_tuples):
+            centroids.add(get_centroid_point(list(obj)))
+
+    # get how many points are inside ellipse which center is defined by centroid
+    centroids_ellipse = []
+    max_val = -1
+    for pos_centroid in centroids:
+        val = sum(1 for pos_point in points if point_inside_ellipse(pos_point, pos_centroid, spell_type))
+        if val > max_val:
+            centroids_ellipse.append((pos_centroid, val))
+            max_val = val
+
+    # choose centroid that includes the most of the points
+    centroids_ellipse.sort(key=lambda x: x[1])
+    point_center = centroids_ellipse[-1][0]
+
+    if f_debug:
+        print('number of points inside=', centroids_ellipse[-1][1])
+        frame = kwargs.get('frame')
+        for (x, y) in points:
+            cv.rectangle(frame, (x - 1, y - 1), (x + 1, y + 1), (0, 0, 255), 2)
+        cv.rectangle(frame, (point_center[0] - 1, point_center[1] - 1), (point_center[0] + 1, point_center[1] + 1), (255, 0, 0), 2)
+        if spell_type == 'Q':
+            ELLIPSE_WITH = 222
+            ELLIPSE_HEIGHT = 180
+        else:   # spell_type == 'W'
+            ELLIPSE_WITH = 385
+            ELLIPSE_HEIGHT = 305
+        cv.ellipse(frame, point_center, (ELLIPSE_WITH // 2, ELLIPSE_HEIGHT // 2), 0, 0, 360, (255, 0, 0), 1)
+        cv.imwrite('imgs\\_output.jpg', frame)
+
+    return point_center
 
 
 class Action:
@@ -790,180 +884,189 @@ class Action:
         self.description = ''
         self.steps = []
         self.step_idx = None
+        self.t0 = None
+        self.TIMEOUT = 30   # sec
+
+    def can_be_started(self, *args, **kwargs):
+        raise NotImplemented
 
     def start(self):
         self.result = 0
+        self.step_idx = 0
+        self.t0 = time.time()
 
-    def stop(self, in_result=-1, in_description='stopped'):
-        pyautogui.press('s')
-        self.set_result(in_result, in_description)
+    def process(self, *args, **kwargs):
+        raise NotImplemented
 
     def set_result(self, in_result, in_description):
         self.result, self.description = in_result, in_description
 
+
+class Actions:
+    def __init__(self):
+        self.objects = {
+            'basic_attack': ActionBasicAttack(),
+            'q_attack': ActionQAttack(),
+            'use_well': ActionUseWell(),
+            'hide_in_bushes': ActionHideInBushes(),
+            'hide_behind_gate': ActionHideBehindGate(),
+            'escape_behind_gate': ActionEscapeBehindGate(),
+            'use_spell_d': ActionUseSpellD()
+        }
+        self.current_action = None
+
+    def start(self, action_name, *args, **kwargs):
+        if self.current_action is None:
+            action = self.objects[action_name]
+            action.__init__()   # reset all values
+            if action.can_be_started(*args, **kwargs):  # TODO: check preconditions for action...
+                self.current_action = action
+                self.current_action.start()
+                return True
+        return False
+
+    def process(self, *args, **kwargs):
+        if self.current_action is not None:
+            # finished?
+            if self.current_action.result in [-1, 1]:
+                self.printout()
+                self.current_action = None
+            # timeout?
+            elif time.time() - self.current_action.t0 >= self.current_action.TIMEOUT:
+                self.current_action.set_result(-1, f'Reached timeout = {self.current_action.TIMEOUT} sec.')
+                self.printout()
+                self.current_action = None
+            # process...
+            else:
+                self.current_action.process(*args, **kwargs)
+
     def printout(self):
-        if len(self.steps) > 0 and self.step_idx is not None:
-            text = f'Action={self.__class__.__name__.replace("Action", "")}, ' \
-                   f'Step={self.steps[self.step_idx]}, ' \
-                   f'Result={self.result}'
-            if len(self.description) > 0:
-                text += f', Description={self.description}'
-            print(text)
+        if self.current_action is not None:
+            if len(self.current_action.steps) > 0 and self.current_action.step_idx is not None:
+                text = f'Action={self.current_action.__class__.__name__.replace("Action", "")}, ' \
+                       f'Step={self.current_action.steps[self.current_action.step_idx]}, ' \
+                       f'Result={self.current_action.result}'
+                if len(self.current_action.description) > 0:
+                    text += f', Description={self.current_action.description}'
+                print(text)
 
 
 class ActionBasicAttack(Action):
     def __init__(self):
         super().__init__()
-        self.bot_pos = (SCREEN_W//2, SCREEN_H//2)   # (x,y)
+        self.MIN_DIST_TO_TARGET = 250
+        self.bot_pos = (SCREEN_W // 2, SCREEN_H // 2)  # (x,y)
         self.steps = [
             'at_range',
             'click_attack'
         ]
-        self.t0 = None
-        self.timeout = 30  # [sec]
 
-    def start(self):
-        super().start()
-        self.step_idx = 0
+    def can_be_started(self, *args, **kwargs):
+        # - at least one red minion
+        minions = kwargs.get('minions')
+        if type(minions) is not dict:
+            return False
+        if 'red' not in minions.keys():
+            return False
+        if not minions['red']:
+            return False
+
+        return True
 
     def process(self, *args, **kwargs):
-        if self.result != [-1, 1]:
-            minions = kwargs.get('minions')
-            # get the position of the closest, red minion => target
-            if minions['red']:
-                distances = []
-                for position in minions['red']:
-                    distances.append((get_distance_between_points(self.bot_pos, position), position))
-                distances.sort()
-                distance, target = distances[0]  # float dist, (x, y)
-                print(distance)
+        minions = kwargs.get('minions')['red']
 
-                if self.steps[self.step_idx] == 'at_range':   # evaluate if bot is in range to attack target position
-                    if distance > 250:
-                        # bot needs to move closer to target position, to be in range
-                        new_pos = self.bot_pos[0] + (target[0]-self.bot_pos[0])//2, \
-                            self.bot_pos[1] + (target[1] - self.bot_pos[1]) // 2
-                        pyautogui.moveTo(*new_pos)
-                        pyautogui.click(button='right')
-                    else:
-                        self.step_idx += 1
+        # get the position of the closest red minion == target
+        distances = [
+            (get_distance_between_points(self.bot_pos, position), position)
+            for position in minions]
+        distances.sort()
+        distance, target = distances[0]  # float dist, (x, y)
 
-                if self.steps[self.step_idx] == 'click_attack':
-                    pyautogui.moveTo(target)
-                    #pyautogui.click(button='left')
-                    pyautogui.press('a')
-                    self.set_result(1, '')  # finished
+        # evaluate if bot is in range to attack target position
+        if self.steps[self.step_idx] == 'at_range':
+            if distance > self.MIN_DIST_TO_TARGET:
+                # bot needs to move closer to target position, to be in range
+                new_pos = self.bot_pos[0] + (target[0] - self.bot_pos[0]) // 2, \
+                          self.bot_pos[1] + (target[1] - self.bot_pos[1]) // 2
+                pyautogui.moveTo(*new_pos)
+                pyautogui.click(button='right')
+            else:   # already close to target
+                self.step_idx += 1
 
-            # timeout?
-            if self.t0 is None:
-                self.t0 = time.time()
-            if time.time() - self.t0 >= self.timeout:
-                self.set_result(-1, f'Bot did not attack target within {self.timeout} sec.')
-                self.t0 = None
+        elif self.steps[self.step_idx] == 'click_attack':
+            pyautogui.moveTo(target)
+            pyautogui.press('a')
+            self.set_result(1, '')  # finish
 
-def fun(*args, **kwargs):
-    from shapely import wkt
-    SPLASH_RADIUS = 150  # px
 
-    minions = kwargs.get('minions')
-    bot = kwargs.get('bot') # TODO
-    if minions['red']:
-        # filter the positions that have the most neighbours within radius range
-        neighbours = {pos: [] for pos in minions['red']}
-        max_num_neighbours = -1
-        for i in range(len(minions['red'])):
-            for j in range(len(minions['red'])):
-                if i != j:
-                    dist = get_distance_between_points(minions['red'][i], minions['red'][j])
-                    if dist <= SPLASH_RADIUS:
-                        neighbours[minions['red'][i]].append(minions['red'][j])
-                        if len(neighbours[minions['red'][i]]) > max_num_neighbours:
-                            max_num_neighbours = len(neighbours[minions['red'][i]])
-
-        # no neighbours? -> return position that is closest to bot
-        if max_num_neighbours == 0:
-            bot_pos = bot['bounding_box'][1]
-            return min([(get_distance_between_points(bot_pos, pos), pos) for pos in minions['red']])[1]
-
-        for key, value in neighbours.items():
-            if len(value) == max_num_neighbours:
-                positions = [key] + value
-                break
-
-        # 1 neighbour? -> return point between 2 positions
-        if max_num_neighbours == 1:
-            x1, y1 = positions[0]
-            x2, y2 = positions[1]
-            return x1+(x1-x2), y1+(y1-y2)
-
-        # 2 or more neighbours? -> return center point of polygon
-        # TODO - poprawic zeby srodek byl wyliczany z obiektu ktory jest podobny do prostokata a nie dowolnego ksztaltu!!
-        polygon_str = 'POLYGON(('
-        for position in positions:
-            polygon_str += str(position[0]) + ' ' + str(position[1]) + ' ,'
-        polygon_str += str(positions[0][0]) + ' ' + str(positions[0][1]) + '))'
-        polygon = wkt.loads(polygon_str)
-        point_center = int(polygon.centroid.x), int(polygon.centroid.y)
-        print(point_center)
-        print(get_distance_between_points(point_center, minions['red'][0]))
-
-        a = 1
-
-    # p1 = wkt.loads("POLYGON((-171379.35 5388068.23,-171378.8 5388077.59,
-    #                 -171368.44 5388076.82,-171368.89 5388067.46,
-    #                 -171379.35 5388068.23))")
-    # print(p1.centroid.wkt)
-
-#TODO
 class ActionQAttack(Action):
     def __init__(self):
         super().__init__()
-        self.bot_pos = (SCREEN_W//2, SCREEN_H//2)   # (x,y)
         self.steps = [
-            'at_range',
-            'click_attack'
+            'choose_target',
+            'click_attack',
+            'spell_cooldown'
         ]
-        self.t0 = None
-        self.timeout = 30  # [sec]
+        self.point_attack = None
 
-    def start(self):
-        super().start()
-        self.step_idx = 0
+    def can_be_started(self, *args, **kwargs):
+        # - frame, bot are available
+        # - at least one red minion
+        # - Q spell available
+        frame = kwargs.get('frame')
+        if type(frame) is not np.ndarray:
+            return False
+
+        bot = kwargs.get('bot')
+        if type(bot) is not dict:
+            return False
+        if 'bounding_box' not in bot.keys():
+            return False
+        if not bot['bounding_box']:
+            return False
+
+        minions = kwargs.get('minions')
+        if type(minions) is not dict:
+            return False
+        if 'red' not in minions.keys():
+            return False
+        if not minions['red']:
+            return False
+
+        cooldowns = get_cooldowns(frame)
+        if cooldowns['Q']:
+            return False
+
+        return True
 
     def process(self, *args, **kwargs):
-        if self.result != [-1, 1]:
-            minions = kwargs.get('minions')
-            # get the position of the closest, red minion => target
-            if minions['red']:
-                distances = []
-                for position in minions['red']:
-                    distances.append((get_distance_between_points(self.bot_pos, position), position))
-                distances.sort()
-                distance, target = distances[0]  # float dist, (x, y)
-                print(distance)
+        frame = kwargs.get('frame')
+        minions = kwargs.get('minions')
+        bot = kwargs.get('bot')
 
-                if self.steps[self.step_idx] == 'at_range':   # evaluate if bot is in range to attack target position
-                    if distance > 250:
-                        # bot needs to move closer to target position, to be in range
-                        new_pos = self.bot_pos[0] + (target[0]-self.bot_pos[0])//2, \
-                            self.bot_pos[1] + (target[1] - self.bot_pos[1]) // 2
-                        pyautogui.moveTo(*new_pos)
-                        pyautogui.click(button='right')
-                    else:
-                        self.step_idx += 1
+        if self.point_attack is None:
+            self.point_attack = get_center_point_for_spell(minions, bot, 'Q')
 
-                if self.steps[self.step_idx] == 'click_attack':
-                    pyautogui.moveTo(target)
-                    #pyautogui.click(button='left')
-                    pyautogui.press('a')
-                    self.set_result(1, '')  # finished
+        if self.steps[self.step_idx] == 'choose_target':
+            pyautogui.moveTo(self.point_attack)
+            pyautogui.click(button='left')
+            pyautogui.press('q')
+            self.step_idx += 1
 
-            # timeout?
-            if self.t0 is None:
-                self.t0 = time.time()
-            if time.time() - self.t0 >= self.timeout:
-                self.set_result(-1, f'Bot did not attack target within {self.timeout} sec.')
-                self.t0 = None
+        elif self.steps[self.step_idx] == 'click_attack':
+            pyautogui.click(button='left')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'spell_cooldown':
+            cooldowns = get_cooldowns(frame)
+            if cooldowns['Q']:
+                self.set_result(1, '')  # finish
+
+
+# TODO
+#   reformat actions below to fit new format
+#   ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
 
 
 class ActionUseWell(Action):
@@ -1283,49 +1386,8 @@ class ActionEscapeBehindGate(Action):
                         self.t0 = None
 
 
-def action_use_well():
-    # if bot's health < max and well is not on cooldown:
-    #   - 'move to gate'
-    #   - find well's position
-    #   - right-click well
-    #   - check if health++
-    pass
 
 
-action = None
-clicked = None
-
-
-def process_action(in_frame, in_action):
-    global action, clicked
-
-    if action is None:
-        action = in_action
-
-    finished = False
-    # move to gate
-    if action == 'move to gate':
-        if clicked is None:
-            pyautogui.moveTo(1654, 912)
-            pyautogui.click(button='right')
-            clicked = True
-        if is_bot_icon_in_place(in_frame, 'gate'):
-            finished = True  # finished action
-
-    # move to bush
-    if action == 'move to bush':
-        if clicked is None:
-            pyautogui.moveTo(1722, 879)
-            pyautogui.click(button='right')
-            clicked = True
-        if is_bot_icon_in_place(in_frame, 'bush'):
-            finished = True  # finished action
-
-    if finished:
-        action = None
-        clicked = None
-
-    return action, clicked
 
 
 # import cv2 as cv

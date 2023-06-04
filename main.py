@@ -5,11 +5,6 @@ from window_capture import WindowCapture
 from functions import *
 import numpy as np
 
-file_path = f'imgs\\attack\\attack_q.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-minions = get_minions_positions(frame, frame_hsv)
-fun(minions=minions)
 
 a = functions.Actions()
 
@@ -22,24 +17,14 @@ a = functions.Actions()
 #   When dead -> check total xp and start from step 1)
 # ----------------------------------------------------------------------------------------------------------
 
-# TODO ellipse:
-# shape:
-#   (for Q attack!)
-#       center= 480, 172
-#       width = 960, height = 770
-#   (for W attack!)
-#       center= 521, 193
-#       width = 878, height = 709
-# distance to target:
-#   https://stackoverflow.com/questions/40193867/distance-from-point-to-ellipse
-
 # TODO: actions
-#   - move & skill attack (Q, W keys)
-#   - move & collect globes
+#   - move to location on minimap
+#   - collect globes after dead minions
 
 
 # Implemented:
 # 'basic_attack' (move & attack closest red minion)
+# 'q_attack' (move & attack with spell 'Q')
 # 'use_well'
 # 'hide_in_bushes'
 # 'hide_behind_gate
@@ -61,7 +46,7 @@ while(True):
     mana_curr, mana_max = get_bot_mana_value(frame)
     cooldowns = get_cooldowns(frame)
     #print(f'Health:{health_curr}/{health_max}\t Mana:{mana_curr}/{mana_max}\t Cooldowns:{cooldowns}')
-    #if is_bot_dead(frame):
+    #if is_bot_dead(frame):q
     #    print('>>> DEAD!')
 
     #if is_bot_icon_in_place(frame, 'gate'):
@@ -69,13 +54,21 @@ while(True):
     #    print('well:', out_x, out_y)
 
     minions = get_minions_positions(frame, frame_hsv)
+    bot, desc = get_bot_positions(frame_hsv)
 
+    kwargs = {
+        'frame': frame,
+        'bot': bot,
+        'minions': minions
+    }
 
     if 2 < time.time() - t0 < 2.5:
-        a.start('basic_attack')
+        print('start...', a.start('q_attack', **kwargs))
 
-    a.process(minions=minions)
-    a.printout()
+    if 10 < time.time() - t0 < 10.5:
+        print('start...', a.start('q_attack', **kwargs))
+
+    a.process(**kwargs)
 
     if time.time() - t0 > 40:
         break
