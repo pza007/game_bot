@@ -47,6 +47,7 @@ template_well = cv.imread(f'imgs\\templates\\well.png', cv.IMREAD_GRAYSCALE)
 template_plus_symbol = cv.imread(f'imgs\\templates\\plus_symbol.png', cv.IMREAD_GRAYSCALE)
 template_hidden_symbol = cv.imread(f'imgs\\templates\\hidden_symbol.png', cv.IMREAD_GRAYSCALE)
 template_blocked_symbol = cv.imread(f'imgs\\templates\\blocked_symbol.png', cv.IMREAD_GRAYSCALE)
+template_minimap = cv.imread(f'imgs\\templates\\minimap.png', cv.IMREAD_GRAYSCALE)
 
 
 

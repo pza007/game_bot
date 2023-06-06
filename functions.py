@@ -668,7 +668,7 @@ def get_bot_icon_position(in_frame):
 
 file_path = f'imgs\\detect\\gate.png'
 frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(get_bot_icon(frame))
+print(get_bot_icon_position(frame))
     """
     # get part of image
     x_min, y_min, x_max, y_max = 1558, 863, 1558 + 366, 863 + 183
@@ -678,7 +678,7 @@ print(get_bot_icon(frame))
     # get positions of template
     threshold = 0.62
     template = template_bot_icon
-    x_shift, y_shit = template.shape[1] // 2, template.shape[0] // 2
+    x_shift, y_shit = template.shape[1] // 2, template.shape[0] // 2 + 6
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= threshold)
     if len(loc[0]) == 0:
@@ -874,6 +874,44 @@ print(get_center_point_for_spell(minions, bot, 'Q', frame=frame))
     return point_center
 
 
+def get_move_position(in_frame, in_direction):
+    """
+    out: (x, y) or (None, None)
+
+file_path = f'imgs\\detect\\gate.png'
+frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+print(get_move_position(frame, 'up'))
+    """
+    dx = 10
+    dy = 10
+    dxy = 7
+    x_shift = SKIP_AREA_BOTTOM_RIGHT[0][0]
+    y_shift = SKIP_AREA_BOTTOM_RIGHT[0][1]
+    x, y = get_bot_icon_position(in_frame)
+
+    if in_direction == 'up':
+        new_x, new_y = x, y - dy
+    elif in_direction == 'down':
+        new_x, new_y = x, y + dy
+    elif in_direction == 'right':
+        new_x, new_y = x + dx, y
+    elif in_direction == 'left':
+        new_x, new_y = x - dx, y
+    elif in_direction == 'up-right':
+        new_x, new_y = x + dxy, y - dxy
+    elif in_direction == 'down-right':
+        new_x, new_y = x + dxy, y + dxy
+    elif in_direction == 'up-left':
+        new_x, new_y = x - dxy, y - dxy
+    else:  # 'down-left'
+        new_x, new_y = x - dxy, y + dxy
+
+    if template_minimap[new_y - y_shift, new_x - x_shift] > 0:
+        return new_x, new_y
+    else:
+        return None, None
+
+
 class Action:
     def __init__(self):
         self.result = None
@@ -911,7 +949,8 @@ class Actions:
             'hide_in_bushes': ActionHideInBushes(),
             'hide_behind_gate': ActionHideBehindGate(),
             'escape_behind_gate': ActionEscapeBehindGate(),
-            'use_spell_d': ActionUseSpellD()
+            'use_spell_d': ActionUseSpellD(),
+            'move': ActionMove()
         }
         self.current_action = None
 
@@ -919,7 +958,7 @@ class Actions:
         if self.current_action is None:
             action = self.objects[action_name]
             action.__init__()   # reset all values
-            if action.can_be_started(*args, **kwargs):  # TODO: check preconditions for action...
+            if action.can_be_started(*args, **kwargs):
                 self.current_action = action
                 self.current_action.start()
                 return True
@@ -1064,11 +1103,6 @@ class ActionQAttack(Action):
                 self.set_result(1, '')  # finish
 
 
-# TODO
-#   reformat actions below to fit new format
-#   ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-
-
 class ActionUseWell(Action):
     def __init__(self):
         super().__init__()
@@ -1080,59 +1114,54 @@ class ActionUseWell(Action):
             'well_cooldown'
         ]
         self.well_x, self.well_y = None, None
-        self.t0 = None
-        self.timeout = 30  # [sec]
-        self.timeout_short = 5  # [sec]
 
-    def start(self):
-        super().start()
-        self.step_idx = 0
+    def can_be_started(self, *args, **kwargs):
+        # - frame is available
+        # - well not on cooldown
+        # - bot's current hp not max hp
+        frame = kwargs.get('frame')
+        if type(frame) is not np.ndarray:
+            return False
+
+        cooldowns = get_cooldowns(frame)
+        if cooldowns['well']:
+            return False
+
+        val_current, val_max = get_bot_health_value(frame)
+        if None in [val_current, val_max]:
+            return False
+        if val_current == val_max:
+            return False
+
+        return True
 
     def process(self, *args, **kwargs):
-        if self.result != [-1, 1]:
-            frame = kwargs.get('frame')
-            if self.steps[self.step_idx] == 'click_gate':
-                pyautogui.moveTo(1654, 912)
-                pyautogui.click(button='right')
+        frame = kwargs.get('frame')
+        if self.steps[self.step_idx] == 'click_gate':
+            pyautogui.moveTo(1654, 912)
+            pyautogui.click(button='right')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'at_gate':
+            if is_bot_icon_in_place(frame, 'gate'):
                 self.step_idx += 1
 
-            if self.steps[self.step_idx] == 'at_gate':
-                if is_bot_icon_in_place(frame, 'gate'):
-                    self.step_idx += 1
-                    self.t0 = None
-                else:
-                    # timeout?
-                    if self.t0 is None:
-                        self.t0 = time.time()
-                    if time.time() - self.t0 >= self.timeout:
-                        self.set_result(-1, f'Bot did not reach gate within {self.timeout} sec.')
-                        self.t0 = None
-
-            if self.steps[self.step_idx] == 'find_well':
-                self.well_x, self.well_y = get_well_position(frame)
-                if None not in [self.well_x, self.well_y]:
-                    self.step_idx += 1
-                else:
-                    self.stop(-1, 'Could not find well')
-                    return
-
-            if self.steps[self.step_idx] == 'click_well':
-                pyautogui.moveTo(self.well_x, self.well_y)
-                pyautogui.click(button='right')
+        elif self.steps[self.step_idx] == 'find_well':
+            self.well_x, self.well_y = get_well_position(frame)
+            if None not in [self.well_x, self.well_y]:
                 self.step_idx += 1
+            else:
+                self.set_result(-1, 'Could not find well')
 
-            if self.steps[self.step_idx] == 'well_cooldown':
-                cooldowns = get_cooldowns(frame)
-                if cooldowns['well']:
-                    self.set_result(1, '')
-                    self.t0 = None
-                else:
-                    # timeout?
-                    if self.t0 is None:
-                        self.t0 = time.time()
-                    if time.time() - self.t0 >= self.timeout_short:
-                        self.set_result(-1, f'Could not detect well cooldown for {self.timeout_short} sec.')
-                        self.t0 = None
+        elif self.steps[self.step_idx] == 'click_well':
+            pyautogui.moveTo(self.well_x, self.well_y)
+            pyautogui.click(button='right')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'well_cooldown':
+            cooldowns = get_cooldowns(frame)
+            if cooldowns['well']:
+                self.set_result(1, '')
 
 
 class ActionHideInBushes(Action):
@@ -1144,42 +1173,34 @@ class ActionHideInBushes(Action):
             'hidden'
         ]
         self.hidden_values = [None] * 10
-        self.t0 = None
-        self.timeout = 30  # [sec]
 
-    def start(self):
-        super().start()
-        self.step_idx = 0
+    def can_be_started(self, *args, **kwargs):
+        # - frame is available
+        frame = kwargs.get('frame')
+        if type(frame) is not np.ndarray:
+            return False
+        return True
 
     def process(self, *args, **kwargs):
-        if self.result != [-1, 1]:
-            frame = kwargs.get('frame')
-            if self.steps[self.step_idx] == 'click_bushes':
-                pyautogui.moveTo(1722, 879)
-                pyautogui.click(button='right')
+        frame = kwargs.get('frame')
+        if self.steps[self.step_idx] == 'click_bushes':
+            pyautogui.moveTo(1722, 879)
+            pyautogui.click(button='right')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'at_bushes':
+            if is_bot_icon_in_place(frame, 'bush'):
                 self.step_idx += 1
 
-            if self.steps[self.step_idx] == 'at_bushes':
-                if is_bot_icon_in_place(frame, 'bush'):
-                    self.step_idx += 1
-                    self.t0 = None
-                else:
-                    # timeout?
-                    if self.t0 is None:
-                        self.t0 = time.time()
-                    if time.time() - self.t0 >= self.timeout:
-                        self.set_result(-1, f'Bot did not reach bushes within {self.timeout} sec.')
-                        self.t0 = None
-
-            if self.steps[self.step_idx] == 'hidden':
-                try:
-                    idx = self.hidden_values.index(None)
-                    val = is_bot_hidden(frame)
-                    if val:
-                        self.set_result(1, '')  # bot is hidden
-                    self.hidden_values[idx] = val
-                except ValueError:
-                    self.set_result(-1, "Bot is not hidden in bushes")
+        elif self.steps[self.step_idx] == 'hidden':
+            try:
+                idx = self.hidden_values.index(None)
+                val = is_bot_hidden(frame)
+                if val:
+                    self.set_result(1, '')  # bot is hidden
+                self.hidden_values[idx] = val
+            except ValueError:
+                self.set_result(-1, "Bot is not hidden in bushes")
 
 
 class ActionHideBehindGate(Action):
@@ -1190,105 +1211,36 @@ class ActionHideBehindGate(Action):
             'at_gate'
         ]
         self.diff_values = [None] * 10
-        self.t0 = None
-        self.timeout = 30  # [sec]
 
-    def start(self):
-        super().start()
-        self.step_idx = 0
-
-    def process(self, *rgs, **kwargs):
+    def can_be_started(self, *args, **kwargs):
+        # - frame is available
         frame = kwargs.get('frame')
-        if self.result != [-1, 1]:
-            if self.steps[self.step_idx] == 'click_gate':
-                pyautogui.moveTo(1654, 912)
-                pyautogui.click(button='right')
-                self.step_idx += 1
-
-            if self.steps[self.step_idx] == 'at_gate':
-                if is_bot_icon_in_place(frame, 'gate'):
-                    self.set_result(1, '')  # finished
-                    self.t0 = None
-                else:
-                    bot_x, bot_y = get_bot_icon_position(frame)
-                    if None not in [bot_x, bot_y]:
-                        try:
-                            idx = self.diff_values.index(None)
-                            val = abs(1654 - bot_x) + abs(912 - bot_y)
-                            self.diff_values[idx] = val
-                        except ValueError:
-                            # all values are gathered
-                            if self.diff_values[-1] >= self.diff_values[0]:
-                                self.set_result(-1,
-                                                f'Bot is not moving towards gate since {len(self.diff_values)} frames')
-                                self.t0 = None
-                            self.diff_values = [None] * len(self.diff_values)  # reset
-                    # timeout?
-                    if self.t0 is None:
-                        self.t0 = time.time()
-                    if time.time() - self.t0 >= self.timeout:
-                        self.set_result(-1, f'Bot did not reach gate within {self.timeout} sec.')
-                        self.t0 = None
-
-
-class ActionUseSpellD(Action):
-    def __init__(self):
-        super().__init__()
-        self.steps = [
-            'press_button',
-            'spell_blocked',
-            'spell_cooldown'
-        ]
-        self.t0 = None
-        self.timeout = 5  # [sec]
-
-    def start(self):
-        super().start()
-        self.step_idx = 0
+        if type(frame) is not np.ndarray:
+            return False
+        return True
 
     def process(self, *args, **kwargs):
-        if self.result != [-1, 1]:
-            frame = kwargs.get('frame')
-            if self.steps[self.step_idx] == 'press_button':
-                pyautogui.moveTo(SCREEN_W // 2, SCREEN_H // 2)
-                pyautogui.click(button='left')
-                pyautogui.press('d')
-                self.step_idx += 1
+        frame = kwargs.get('frame')
+        if self.steps[self.step_idx] == 'click_gate':
+            pyautogui.moveTo(1654, 912)
+            pyautogui.click(button='right')
+            self.step_idx += 1
 
-            if self.steps[self.step_idx] == 'spell_blocked':
-                # get part of image
-                x_min, y_min, x_max, y_max = 1006, 1010, 1006 + 144, 1010 + 40
-                img = frame[y_min:y_max, x_min:x_max]
-                img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-                # get positions of template
-                threshold = 0.8
-                template = template_blocked_symbol
-                x_shift, y_shit = template.shape[1] // 2, template.shape[0] // 2
-                res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
-                loc = np.where(res >= threshold)
-                if len(loc[0]) > 0:
-                    self.step_idx += 1  # found symbol
-                    self.t0 = None
-                else:
-                    # timeout?
-                    if self.t0 is None:
-                        self.t0 = time.time()
-                    if time.time() - self.t0 >= self.timeout:
-                        self.set_result(-1, f'Could not detect spell_blocked symbol for {self.timeout} sec.')
-                        self.t0 = None
-
-            if self.steps[self.step_idx] == 'spell_cooldown':
-                cooldowns = get_cooldowns(frame)
-                if cooldowns['D']:
-                    self.set_result(1, '')
-                    self.t0 = None
-                else:
-                    # timeout?
-                    if self.t0 is None:
-                        self.t0 = time.time()
-                    if time.time() - self.t0 >= self.timeout:
-                        self.set_result(-1, f'Could not detect spell cooldown for {self.timeout} sec.')
-                        self.t0 = None
+        elif self.steps[self.step_idx] == 'at_gate':
+            if is_bot_icon_in_place(frame, 'gate'):
+                self.set_result(1, '')  # finished
+            else:
+                bot_x, bot_y = get_bot_icon_position(frame)
+                if None not in [bot_x, bot_y]:
+                    try:
+                        idx = self.diff_values.index(None)
+                        val = abs(1654 - bot_x) + abs(912 - bot_y)
+                        self.diff_values[idx] = val
+                    except ValueError:
+                        # all values are gathered
+                        if self.diff_values[-1] >= self.diff_values[0]:
+                            self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
+                        self.diff_values = [None] * len(self.diff_values)  # reset
 
 
 class ActionEscapeBehindGate(Action):
@@ -1302,90 +1254,187 @@ class ActionEscapeBehindGate(Action):
             'at_gate'
         ]
         self.diff_values = [None] * 10
-        self.t0 = None
-        self.timeout = 30  # [sec]
-        self.timeout_short = 5  # [sec]
+        self.t1 = None
+        self.timeout1 = 5  # [sec]
 
-    def start(self):
-        super().start()
-        self.step_idx = 0
+    def can_be_started(self, *args, **kwargs):
+        # - frame is available
+        # - E spell not on cooldown
+        frame = kwargs.get('frame')
+        if type(frame) is not np.ndarray:
+            return False
+
+        cooldowns = get_cooldowns(frame)
+        if cooldowns['E']:
+            return False
+
+        return True
 
     def process(self, *args, **kwargs):
-        if self.result != [-1, 1]:
-            frame = kwargs.get('frame')
-            if self.steps[self.step_idx] == 'press_button':
-                # get mouse position between bot and gate
-                bot_icon_pos = get_bot_icon_position(frame)
-                if None in bot_icon_pos:
-                    self.set_result(-1, f'Could not detect bot icon position')
-                    return
-                in_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-                positions, description = get_bot_positions(in_hsv)
-                if positions is None:
-                    self.set_result(-1, description)
-                    return
-                circle_pos = positions['circle'][1]
-                gate_icon_pos = (1654, 912)
-                vector = (gate_icon_pos[0] - bot_icon_pos[0], gate_icon_pos[1] - bot_icon_pos[1])
-                mouse_pos = (circle_pos[0] + vector[0], circle_pos[1] + vector[1])
-                # button
-                pyautogui.moveTo(mouse_pos[0], mouse_pos[1])
-                pyautogui.click(button='left')
-                pyautogui.press('e')
-                pyautogui.click(button='left')
+        frame = kwargs.get('frame')
+        if self.steps[self.step_idx] == 'press_button':
+            # get mouse position between bot and gate
+            bot_icon_pos = get_bot_icon_position(frame)
+            if None in bot_icon_pos:
+                self.set_result(-1, f'Could not detect bot icon position')
+                return
+            in_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+            positions, description = get_bot_positions(in_hsv)
+            if positions is None:
+                self.set_result(-1, description)
+                return
+            circle_pos = positions['circle'][1]
+            gate_icon_pos = (1654, 912)
+            vector = (gate_icon_pos[0] - bot_icon_pos[0], gate_icon_pos[1] - bot_icon_pos[1])
+            mouse_pos = (circle_pos[0] + vector[0], circle_pos[1] + vector[1])
+            # button
+            pyautogui.moveTo(mouse_pos[0], mouse_pos[1])
+            pyautogui.click(button='left')
+            pyautogui.press('e')
+            pyautogui.click(button='left')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'wait':
+            if self.t1 is None:
+                self.t1 = time.time()
+            if time.time() - self.t1 >= 1.0:  # sec
                 self.step_idx += 1
+                self.t1 = None
 
-            if self.steps[self.step_idx] == 'wait':
-                if self.t0 is None:
-                    self.t0 = time.time()
-                if time.time() - self.t0 >= 1.0:  # sec
-                    self.step_idx += 1
-                    self.t0 = None
-
-            if self.steps[self.step_idx] == 'spell_cooldown':
-                cooldowns = get_cooldowns(frame)
-                if cooldowns['E']:
-                    self.step_idx += 1
-                    self.t0 = None
-                else:
-                    # timeout?
-                    if self.t0 is None:
-                        self.t0 = time.time()
-                    if time.time() - self.t0 >= self.timeout_short:
-                        self.set_result(-1, f'Could not detect spell cooldown for {self.timeout_short} sec.')
-                        self.t0 = None
-
-            if self.steps[self.step_idx] == 'click_gate':
-                pyautogui.moveTo(1654, 912)
-                pyautogui.click(button='right')
+        elif self.steps[self.step_idx] == 'spell_cooldown':
+            cooldowns = get_cooldowns(frame)
+            if cooldowns['E']:
                 self.step_idx += 1
+                self.t1 = None
+            else:
+                # timeout?
+                if self.t1 is None:
+                    self.t1 = time.time()
+                if time.time() - self.t1 >= self.timeout1:
+                    self.set_result(-1, f'Could not detect spell cooldown for {self.timeout1} sec.')
+                    self.t1 = None
 
-            if self.steps[self.step_idx] == 'at_gate':
-                if is_bot_icon_in_place(frame, 'gate'):
-                    self.set_result(1, '')  # finished
-                    self.t0 = None
-                else:
-                    bot_x, bot_y = get_bot_icon_position(frame)
-                    if None not in [bot_x, bot_y]:
-                        try:
-                            idx = self.diff_values.index(None)
-                            val = abs(1654 - bot_x) + abs(912 - bot_y)
-                            self.diff_values[idx] = val
-                        except ValueError:
-                            # all values are gathered
-                            if self.diff_values[-1] >= self.diff_values[0]:
-                                self.set_result(-1,
-                                                f'Bot is not moving towards gate since {len(self.diff_values)} frames')
-                                self.t0 = None
-                            self.diff_values = [None] * len(self.diff_values)  # reset
-                    # timeout?
-                    if self.t0 is None:
-                        self.t0 = time.time()
-                    if time.time() - self.t0 >= self.timeout:
-                        self.set_result(-1, f'Bot did not reach gate within {self.timeout} sec.')
-                        self.t0 = None
+        elif self.steps[self.step_idx] == 'click_gate':
+            pyautogui.moveTo(1654, 912)
+            pyautogui.click(button='right')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'at_gate':
+            if is_bot_icon_in_place(frame, 'gate'):
+                self.set_result(1, '')  # finished
+            else:
+                bot_x, bot_y = get_bot_icon_position(frame)
+                if None not in [bot_x, bot_y]:
+                    try:
+                        idx = self.diff_values.index(None)
+                        val = abs(1654 - bot_x) + abs(912 - bot_y)
+                        self.diff_values[idx] = val
+                    except ValueError:
+                        # all values are gathered
+                        if self.diff_values[-1] >= self.diff_values[0]:
+                            self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
+                        self.diff_values = [None] * len(self.diff_values)  # reset
 
 
+class ActionUseSpellD(Action):
+    def __init__(self):
+        super().__init__()
+        self.steps = [
+            'press_button',
+            'spell_blocked',
+            'spell_cooldown'
+        ]
+        self.t1 = None
+        self.timeout1 = 5  # [sec]
+
+    def can_be_started(self, *args, **kwargs):
+        # - frame is available
+        # - D not on cooldown
+        frame = kwargs.get('frame')
+        if type(frame) is not np.ndarray:
+            return False
+
+        cooldowns = get_cooldowns(frame)
+        if cooldowns['D']:
+            return False
+
+        return True
+
+    def process(self, *args, **kwargs):
+        frame = kwargs.get('frame')
+        if self.steps[self.step_idx] == 'press_button':
+            pyautogui.moveTo(SCREEN_W // 2, SCREEN_H // 2)
+            pyautogui.click(button='left')
+            pyautogui.press('d')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'spell_blocked':
+            # get part of image
+            x_min, y_min, x_max, y_max = 1006, 1010, 1006 + 144, 1010 + 40
+            img = frame[y_min:y_max, x_min:x_max]
+            img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+            # get positions of template
+            threshold = 0.8
+            template = template_blocked_symbol
+            x_shift, y_shit = template.shape[1] // 2, template.shape[0] // 2
+            res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
+            loc = np.where(res >= threshold)
+            if len(loc[0]) > 0:
+                self.step_idx += 1  # found symbol
+                self.t1 = None
+            else:
+                # timeout?
+                if self.t1 is None:
+                    self.t1 = time.time()
+                if time.time() - self.t1 >= self.timeout1:
+                    self.set_result(-1, f'Could not detect spell_blocked symbol for {self.timeout1} sec.')
+
+        elif self.steps[self.step_idx] == 'spell_cooldown':
+            cooldowns = get_cooldowns(frame)
+            if cooldowns['D']:
+                self.set_result(1, '')
+
+
+class ActionMove(Action):
+    def __init__(self):
+        super().__init__()
+        self.steps = [
+            'click_position',
+            'at_position'
+        ]
+        self.x, self.y = None, None
+
+    def can_be_started(self, *args, **kwargs):
+        # - frame is available
+        # - direction is defined, can be reached
+        frame = kwargs.get('frame')
+        if type(frame) is not np.ndarray:
+            return False
+
+        direction = kwargs.get('direction')
+        if direction not in ['up', 'down', 'right', 'left', 'up-right', 'down-right', 'up-left', 'down-left']:
+            return False
+        x, y = get_move_position(frame, direction)
+        if None in [x, y]:
+            return False
+
+        return True
+
+    def process(self, *args, **kwargs):
+        frame = kwargs.get('frame')
+        direction = kwargs.get('direction')
+        if self.x is None and self.y is None:
+            self.x, self.y = get_move_position(frame, direction)
+
+        if self.steps[self.step_idx] == 'click_position':
+            pyautogui.moveTo(self.x, self.y)
+            pyautogui.click(button='right')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'at_position':
+            x, y = get_bot_icon_position(frame)
+            if self.x - 2 <= x <= self.x + 2 and self.y - 2 <= y <= self.y + 2:
+                self.set_result(1, '')  # finished
 
 
 

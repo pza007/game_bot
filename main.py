@@ -5,7 +5,6 @@ from window_capture import WindowCapture
 from functions import *
 import numpy as np
 
-
 a = functions.Actions()
 
 # TODO: plan for game
@@ -18,7 +17,6 @@ a = functions.Actions()
 # ----------------------------------------------------------------------------------------------------------
 
 # TODO: actions
-#   - move to location on minimap
 #   - collect globes after dead minions
 
 
@@ -30,6 +28,7 @@ a = functions.Actions()
 # 'hide_behind_gate
 # 'escape_behind_gate' (with spell 'E')
 # 'use_spell_d' (recover health)
+# 'move' (up, right, down, left, up-right, down-right, left-down, up-left)
 # ----------------------------------------------------------------------------------------------------------
 
 t0 = time.time()
@@ -59,14 +58,26 @@ while(True):
     kwargs = {
         'frame': frame,
         'bot': bot,
-        'minions': minions
+        'minions': minions,
+        'direction': 'right'
     }
 
-    if 2 < time.time() - t0 < 2.5:
-        print('start...', a.start('q_attack', **kwargs))
+    if 2 < time.time() - t0 < 2.1:
+        print('start...', a.start('move', **kwargs))
+    if 4 < time.time() - t0 < 4.1:
+        print('start...', a.start('move', **kwargs))
+    if 6 < time.time() - t0 < 6.1:
+        print('start...', a.start('move', **kwargs))
 
-    if 10 < time.time() - t0 < 10.5:
-        print('start...', a.start('q_attack', **kwargs))
+    if 8 < time.time() - t0 < 8.1:
+        kwargs['direction'] = 'left'
+        print('start...', a.start('move', **kwargs))
+    if 10 < time.time() - t0 < 10.1:
+        kwargs['direction'] = 'left'
+        print('start...', a.start('move', **kwargs))
+    if 12 < time.time() - t0 < 12.1:
+        kwargs['direction'] = 'left'
+        print('start...', a.start('move', **kwargs))
 
     a.process(**kwargs)
 
