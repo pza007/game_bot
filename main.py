@@ -1,12 +1,3 @@
-import cv2 as cv
-
-import functions
-from window_capture import WindowCapture
-from functions import *
-import numpy as np
-
-a = functions.Actions()
-
 # TODO: plan for game
 #   0. No ally, no enemy, toggle ON minions, control panel hidden, talent tree hidden
 #   1. Refresh forts (unhide, hide control panel)
@@ -16,8 +7,7 @@ a = functions.Actions()
 #   When dead -> check total xp and start from step 1)
 # ----------------------------------------------------------------------------------------------------------
 
-# TODO: actions
-#   - collect globes after dead minions
+
 
 
 # Implemented:
@@ -30,82 +20,10 @@ a = functions.Actions()
 # 'use_spell_d' (recover health)
 # 'move' (up, right, down, left, up-right, down-right, left-down, up-left)
 # ----------------------------------------------------------------------------------------------------------
+from spectator_lib import Spectator
 
-t0 = time.time()
-window = WindowCapture('Heroes of the Storm')
-loop_time = time.time()
-while(True):
-    # get screenshot
-    frame = window.get_screenshot()
-    frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-    #screenshot = cv.imread("imgs\\in_img.png", cv.IMREAD_UNCHANGED)
-    #cv.imshow('Computer Vision', screenshot)
-
-    health_curr, health_max = get_bot_health_value(frame)
-    mana_curr, mana_max = get_bot_mana_value(frame)
-    cooldowns = get_cooldowns(frame)
-    #print(f'Health:{health_curr}/{health_max}\t Mana:{mana_curr}/{mana_max}\t Cooldowns:{cooldowns}')
-    #if is_bot_dead(frame):q
-    #    print('>>> DEAD!')
-
-    #if is_bot_icon_in_place(frame, 'gate'):
-    #    out_x, out_y = get_well_position(frame)
-    #    print('well:', out_x, out_y)
-
-    minions = get_minions_positions(frame, frame_hsv)
-    bot, desc = get_bot_positions(frame_hsv)
-
-    kwargs = {
-        'frame': frame,
-        'bot': bot,
-        'minions': minions,
-        'direction': 'right'
-    }
-
-    if 2 < time.time() - t0 < 2.1:
-        print('start...', a.start('move', **kwargs))
-    if 4 < time.time() - t0 < 4.1:
-        print('start...', a.start('move', **kwargs))
-    if 6 < time.time() - t0 < 6.1:
-        print('start...', a.start('move', **kwargs))
-
-    if 8 < time.time() - t0 < 8.1:
-        kwargs['direction'] = 'left'
-        print('start...', a.start('move', **kwargs))
-    if 10 < time.time() - t0 < 10.1:
-        kwargs['direction'] = 'left'
-        print('start...', a.start('move', **kwargs))
-    if 12 < time.time() - t0 < 12.1:
-        kwargs['direction'] = 'left'
-        print('start...', a.start('move', **kwargs))
-
-    a.process(**kwargs)
-
-    if time.time() - t0 > 40:
-        break
-
-
-    """
-    detect_objects(screenshot)
-    track_objects()
-    l_screenshot = paint_objects()
-    # show
-    cv.imshow('Computer Vision', l_screenshot)
-    """
-
-    # debug the loop rate
-    #print('FPS {}'.format(1 / (time() - loop_time)))
-    loop_time = time.time()
-
-    # press 'q' with the output window focused to exit.
-    # waits 1 ms every loop to process key presses
-    if cv.waitKey(1) == ord('q'):
-        cv.destroyAllWindows()
-        break
-
-#save_image(l_screenshot, f"imgs\\output.jpg")
-print('Done.')
-
+spec = Spectator()
+spec.run()
 
 
 # GET H,S,V VALUES OF IMAGE

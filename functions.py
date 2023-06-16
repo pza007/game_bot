@@ -7,7 +7,7 @@ from itertools import product, combinations
 
 
 def get_distance_between_points(point1, point2):
-    return np.linalg.norm(np.array((point1[0], point1[1])) - np.array((point2[0], point2[1])))
+    return float(np.linalg.norm(np.array((point1[0], point1[1])) - np.array((point2[0], point2[1]))))
 
 
 def get_centroid_point(list_of_points: list) -> tuple:
@@ -227,6 +227,7 @@ print(get_minions_positions(img, hsv))
         contours = filter_2(contours)
         contours = filter_3(contours)
         contours = filter_4(contours)
+        contours = [(int(x_min), int(y_min), int(x_max), int(y_max)) for (x_min, y_min, x_max, y_max) in contours]
 
         return contours
 
@@ -254,7 +255,7 @@ print(get_minions_positions(img, hsv))
 
                 x_new = x_min + (x_max - x_min) // 2
                 y_new = y_min + (y_max - y_min) // 2
-                new_list.append((x_new, y_new))  # (x,y) of center
+                new_list.append((int(x_new), int(y_new)))  # (x,y) of center
 
             out[color] = new_list
 
@@ -341,7 +342,7 @@ cv.imwrite('imgs\\_result.jpg', frame)
                 x_max = max([_contour[0][0] for _contour in contour])  # point X
                 y_min = min([_contour[0][1] for _contour in contour])  # point Y
                 y_max = max([_contour[0][1] for _contour in contour])  # point Y
-                out_contours.append([(x_min, y_min), (x_max, y_max)])
+                out_contours.append([(int(x_min), int(y_min)), (int(x_max), int(y_max))])
 
             return out_contours
 
@@ -436,7 +437,7 @@ cv.imwrite('imgs\\_result.jpg', frame)
 
 def get_bot_health_value(in_frame):
     """
-    out: (val_current, val_max)
+    out: (val_current, val_max) or (None, None)
 
 from functions import get_bot_health_value
 file_path = f'imgs\\detect\\health\\'
@@ -487,7 +488,7 @@ for cnt in range(1, 7):
 
 def get_bot_mana_value(in_frame):
     """
-    out: (val_current, val_max)
+    out: (val_current, val_max) or (None, None)
 
 from functions import get_bot_mana_value
 file_path = f'imgs\\detect\\mana\\'
@@ -624,7 +625,7 @@ print(is_bot_hidden(frame))
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get positions of template
-    threshold = 0.5
+    threshold = 0.45
     template = template_hidden_symbol
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= threshold)
@@ -685,20 +686,16 @@ print(get_bot_icon_position(frame))
         return None, None  # could not find icon's position
     else:
         x_out, y_out = x_min + loc[::-1][0][0] + x_shift, y_min + loc[::-1][1][0] + y_shit
-        return x_out, y_out
+        return int(x_out), int(y_out)
 
 
-def is_bot_icon_in_place(in_frame, in_place):
+def is_bot_icon_in_place(position: tuple, in_place: str) -> bool:
     """
     out: True or False
-
-file_path = f'imgs\\detect\\gate.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(verify_bot_icon_place(frame, 'gate'))
     """
-    x, y = get_bot_icon_position(in_frame)
-    if None in [x, y]:
-        return False  # could not find icon's position
+    x, y = position
+    if type(x) is not int or type(y) is not int:
+        raise Exception(f'Invalid input type: x={x}, y={y}')
 
     if in_place == 'gate':
         x_min, y_min, x_max, y_max = 1651, 899, 1651 + 6, 899 + 17
@@ -707,12 +704,22 @@ print(verify_bot_icon_place(frame, 'gate'))
         else:
             return False
 
-    if in_place == 'bush':
-        x_min, y_min, x_max, y_max = 1712, 873, 1712 + 23, 873 + 3
+    elif in_place == 'bush':
+        x_min, y_min, x_max, y_max = 1712, 880, 1712 + 23, 880 + 4
         if x_min <= x <= x_max and y_min <= y <= y_max:
             return True
         else:
             return False
+
+    elif in_place == 'middle':
+        x_min, y_min, x_max, y_max = 1723-5, 896-5, 1723+5, 896+5
+        if x_min <= x <= x_max and y_min <= y <= y_max:
+            return True
+        else:
+            return False
+
+    else:
+        raise Exception(f'Invalid input: in_place={in_place}')
 
 
 def get_well_position(in_frame):
@@ -741,7 +748,7 @@ print(get_well_position(frame))
     if circles is not None and circles.shape == (1, 1, 3):
         circle_x, circle_y, circle_r = int(circles[0][0][0]), int(circles[0][0][1]), int(circles[0][0][2])
         out_x, out_y = x_min + circle_x, y_min + circle_y
-        return out_x, out_y
+        return int(out_x), int(out_y)
     else:
         return None, None  # could not find circle
 
@@ -788,7 +795,7 @@ print(get_well_position(frame))
     """
 
 
-def get_center_point_for_spell(minions: dict, bot: dict, spell_type: str, **kwargs) -> tuple:
+def get_center_point_for_spell(minions: dict, bot_pos: dict, spell_type: str, **kwargs) -> tuple:
     """
     out: (x, y)
 
@@ -830,12 +837,11 @@ print(get_center_point_for_spell(minions, bot, 'Q', frame=frame))
     points = get_points(minions['red'])
     #   1 point -> return point that is closest to bot
     if len(points) == 1:
-        bot_pos = bot['bounding_box'][1]
         return min((get_distance_between_points(bot_pos, pos), pos) for pos in minions['red'])[1]
     #   2 points -> return point between them
     if len(points) == 2:
         (x1, y1), (x2, y2) = points
-        return x1 + (x1 - x2), y1 + (y1 - y2)
+        return int(x1 + (x1 - x2)), int(y1 + (y1 - y2))
 
     # get centroids
     centroids = set()
@@ -871,10 +877,10 @@ print(get_center_point_for_spell(minions, bot, 'Q', frame=frame))
         cv.ellipse(frame, point_center, (ELLIPSE_WITH // 2, ELLIPSE_HEIGHT // 2), 0, 0, 360, (255, 0, 0), 1)
         cv.imwrite('imgs\\_output.jpg', frame)
 
-    return point_center
+    return int(point_center[0]), int(point_center[1])
 
 
-def get_move_position(in_frame, in_direction):
+def get_move_position(position, in_direction):
     """
     out: (x, y) or (None, None)
 
@@ -882,12 +888,14 @@ file_path = f'imgs\\detect\\gate.png'
 frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
 print(get_move_position(frame, 'up'))
     """
-    dx = 10
-    dy = 10
-    dxy = 7
+    dx = 8
+    dy = 8
+    dxy = 5
     x_shift = SKIP_AREA_BOTTOM_RIGHT[0][0]
     y_shift = SKIP_AREA_BOTTOM_RIGHT[0][1]
-    x, y = get_bot_icon_position(in_frame)
+    x, y = position
+    if type(x) is not int or type(y) is not int:
+        raise Exception(f'Invalid input type: x={x}, y={y}')
 
     if in_direction == 'up':
         new_x, new_y = x, y - dy
@@ -906,10 +914,14 @@ print(get_move_position(frame, 'up'))
     else:  # 'down-left'
         new_x, new_y = x - dxy, y + dxy
 
-    if template_minimap[new_y - y_shift, new_x - x_shift] > 0:
-        return new_x, new_y
-    else:
+    if 0 > new_x - x_shift or new_x - x_shift > template_minimap.shape[1]-1:    # x
         return None, None
+    elif 0 > new_y - y_shift or new_y - y_shift > template_minimap.shape[0]-1:    # y
+        return None, None
+    elif template_minimap[new_y - y_shift, new_x - x_shift] != 255:
+        return None, None
+    else:
+        return int(new_x), int(new_y)
 
 
 class Action:
@@ -943,21 +955,47 @@ class Action:
 class Actions:
     def __init__(self):
         self.objects = {
+            'move_up': ActionMove('up'),
+            'move_down': ActionMove('down'),
+            'move_right': ActionMove('right'),
+            'move_left': ActionMove('left'),
+            'move_up-right': ActionMove('up-right'),
+            'move_down-right': ActionMove('down-right'),
+            'move_up-left': ActionMove('up-left'),
+            'move_down-left': ActionMove('down-left'),
+            'run_middle': ActionRunMiddle(),
+            'collect_globes': ActionCollectGlobes(),
+
             'basic_attack': ActionBasicAttack(),
             'q_attack': ActionQAttack(),
+            'w_attack': ActionWAttack(),
+
             'use_well': ActionUseWell(),
             'hide_in_bushes': ActionHideInBushes(),
             'hide_behind_gate': ActionHideBehindGate(),
             'escape_behind_gate': ActionEscapeBehindGate(),
-            'use_spell_d': ActionUseSpellD(),
-            'move': ActionMove()
+            'use_spell_d': ActionUseSpellD()
         }
         self.current_action = None
+
+    def get_available_actions(self, *args, **kwargs):
+        out = []
+        for name, action in self.objects.items():
+            if action.can_be_started(*args, **kwargs):
+                out.append(name)
+        return out
 
     def start(self, action_name, *args, **kwargs):
         if self.current_action is None:
             action = self.objects[action_name]
-            action.__init__()   # reset all values
+
+            # Reset all values
+            if action_name.find('move_') >= 0:  # special for move actions
+                direction = action_name[5:]
+                action.__init__(direction)
+            else:
+                action.__init__()
+
             if action.can_be_started(*args, **kwargs):
                 self.current_action = action
                 self.current_action.start()
@@ -994,31 +1032,33 @@ class ActionBasicAttack(Action):
     def __init__(self):
         super().__init__()
         self.MIN_DIST_TO_TARGET = 250
-        self.bot_pos = (SCREEN_W // 2, SCREEN_H // 2)  # (x,y)
         self.steps = [
             'at_range',
             'click_attack'
         ]
 
     def can_be_started(self, *args, **kwargs):
+        # - bot position available
         # - at least one red minion
-        minions = kwargs.get('minions')
-        if type(minions) is not dict:
+
+        try:
+            int(kwargs.get('bot_pos_frame')['bounding_box'][1][0])   # x
+        except Exception:
             return False
-        if 'red' not in minions.keys():
-            return False
-        if not minions['red']:
+
+        try:
+            int(kwargs.get('minions')['red'][0][0])   # x
+        except Exception:
             return False
 
         return True
 
     def process(self, *args, **kwargs):
+        bot_x, bot_y = kwargs.get('bot_pos_frame')['bounding_box'][1]    # (center x, center y)
         minions = kwargs.get('minions')['red']
 
         # get the position of the closest red minion == target
-        distances = [
-            (get_distance_between_points(self.bot_pos, position), position)
-            for position in minions]
+        distances = [(get_distance_between_points((bot_x, bot_y), minion_pos), minion_pos) for minion_pos in minions]
         distances.sort()
         distance, target = distances[0]  # float dist, (x, y)
 
@@ -1026,8 +1066,8 @@ class ActionBasicAttack(Action):
         if self.steps[self.step_idx] == 'at_range':
             if distance > self.MIN_DIST_TO_TARGET:
                 # bot needs to move closer to target position, to be in range
-                new_pos = self.bot_pos[0] + (target[0] - self.bot_pos[0]) // 2, \
-                          self.bot_pos[1] + (target[1] - self.bot_pos[1]) // 2
+                new_pos = bot_x + (target[0] - bot_x) // 2, \
+                          bot_y + (target[1] - bot_y) // 2
                 pyautogui.moveTo(*new_pos)
                 pyautogui.click(button='right')
             else:   # already close to target
@@ -1050,42 +1090,32 @@ class ActionQAttack(Action):
         self.point_attack = None
 
     def can_be_started(self, *args, **kwargs):
-        # - frame, bot are available
+        # - bot position available
         # - at least one red minion
         # - Q spell available
-        frame = kwargs.get('frame')
-        if type(frame) is not np.ndarray:
+
+        try:
+            int(kwargs.get('bot_pos_frame')['bounding_box'][1][0])   # x
+        except Exception:
             return False
 
-        bot = kwargs.get('bot')
-        if type(bot) is not dict:
-            return False
-        if 'bounding_box' not in bot.keys():
-            return False
-        if not bot['bounding_box']:
+        try:
+            int(kwargs.get('minions')['red'][0][0])   # x
+        except Exception:
             return False
 
-        minions = kwargs.get('minions')
-        if type(minions) is not dict:
-            return False
-        if 'red' not in minions.keys():
-            return False
-        if not minions['red']:
-            return False
-
-        cooldowns = get_cooldowns(frame)
-        if cooldowns['Q']:
+        if kwargs.get('cooldowns')['Q']:
             return False
 
         return True
 
     def process(self, *args, **kwargs):
-        frame = kwargs.get('frame')
         minions = kwargs.get('minions')
-        bot = kwargs.get('bot')
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box'][1]    # (center_x, center_y)
+        cooldowns = kwargs.get('cooldowns')
 
         if self.point_attack is None:
-            self.point_attack = get_center_point_for_spell(minions, bot, 'Q')
+            self.point_attack = get_center_point_for_spell(minions, bot_pos, 'Q')
 
         if self.steps[self.step_idx] == 'choose_target':
             pyautogui.moveTo(self.point_attack)
@@ -1098,8 +1128,60 @@ class ActionQAttack(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'spell_cooldown':
-            cooldowns = get_cooldowns(frame)
             if cooldowns['Q']:
+                self.set_result(1, '')  # finish
+
+
+class ActionWAttack(Action):
+    def __init__(self):
+        super().__init__()
+        self.steps = [
+            'choose_target',
+            'click_attack',
+            'spell_cooldown'
+        ]
+        self.point_attack = None
+
+    def can_be_started(self, *args, **kwargs):
+        # - bot position available
+        # - at least one red minion
+        # - W spell available
+
+        try:
+            int(kwargs.get('bot_pos_frame')['bounding_box'][1][0])   # x
+        except Exception:
+            return False
+
+        try:
+            int(kwargs.get('minions')['red'][0][0])   # x
+        except Exception:
+            return False
+
+        if kwargs.get('cooldowns')['W']:
+            return False
+
+        return True
+
+    def process(self, *args, **kwargs):
+        minions = kwargs.get('minions')
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box'][1]    # (center_x, center_y)
+        cooldowns = kwargs.get('cooldowns')
+
+        if self.point_attack is None:
+            self.point_attack = get_center_point_for_spell(minions, bot_pos, 'W')
+
+        if self.steps[self.step_idx] == 'choose_target':
+            pyautogui.moveTo(self.point_attack)
+            pyautogui.click(button='left')
+            pyautogui.press('w')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'click_attack':
+            pyautogui.click(button='left')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'spell_cooldown':
+            if cooldowns['W']:
                 self.set_result(1, '')  # finish
 
 
@@ -1117,33 +1199,43 @@ class ActionUseWell(Action):
 
     def can_be_started(self, *args, **kwargs):
         # - frame is available
+        # - bot_pos_minimap is available
         # - well not on cooldown
-        # - bot's current hp not max hp
+        # - bot's health < max
+
         frame = kwargs.get('frame')
         if type(frame) is not np.ndarray:
             return False
 
-        cooldowns = get_cooldowns(frame)
-        if cooldowns['well']:
+        try:
+            int(kwargs.get('bot_pos_minimap')[0])   # x
+        except Exception:
             return False
 
-        val_current, val_max = get_bot_health_value(frame)
-        if None in [val_current, val_max]:
+        if kwargs.get('cooldowns')['well']:
             return False
-        if val_current == val_max:
+
+        try:
+            int(kwargs.get('bot_health')[0])    # current
+        except Exception:
+            return False
+        if int(kwargs.get('bot_health')[0]) > 0.95*int(kwargs.get('bot_health')[1]):
             return False
 
         return True
 
     def process(self, *args, **kwargs):
         frame = kwargs.get('frame')
+        bot_pos_minimap = kwargs.get('bot_pos_minimap')
+        cooldowns = kwargs.get('cooldowns')
+
         if self.steps[self.step_idx] == 'click_gate':
             pyautogui.moveTo(1654, 912)
             pyautogui.click(button='right')
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_gate':
-            if is_bot_icon_in_place(frame, 'gate'):
+            if is_bot_icon_in_place(bot_pos_minimap, 'gate'):
                 self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'find_well':
@@ -1159,7 +1251,6 @@ class ActionUseWell(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'well_cooldown':
-            cooldowns = get_cooldowns(frame)
             if cooldowns['well']:
                 self.set_result(1, '')
 
@@ -1176,20 +1267,34 @@ class ActionHideInBushes(Action):
 
     def can_be_started(self, *args, **kwargs):
         # - frame is available
+        # - bot_pos_minimap is available
+        # - bot not in bushes
+
         frame = kwargs.get('frame')
         if type(frame) is not np.ndarray:
             return False
+
+        try:
+            int(kwargs.get('bot_pos_minimap')[0])   # x
+        except Exception:
+            return False
+
+        if is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'bush'):
+            return False
+
         return True
 
     def process(self, *args, **kwargs):
         frame = kwargs.get('frame')
+        bot_pos_minimap = kwargs.get('bot_pos_minimap')
+
         if self.steps[self.step_idx] == 'click_bushes':
             pyautogui.moveTo(1722, 879)
             pyautogui.click(button='right')
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_bushes':
-            if is_bot_icon_in_place(frame, 'bush'):
+            if is_bot_icon_in_place(bot_pos_minimap, 'bush'):
                 self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'hidden':
@@ -1213,34 +1318,39 @@ class ActionHideBehindGate(Action):
         self.diff_values = [None] * 10
 
     def can_be_started(self, *args, **kwargs):
-        # - frame is available
-        frame = kwargs.get('frame')
-        if type(frame) is not np.ndarray:
+        # - bot pos icon is available
+        # - bot not at gate
+
+        try:
+            int(kwargs.get('bot_pos_minimap')[0])   # x
+        except Exception:
             return False
+
+        if is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate'):
+            return False
+
         return True
 
     def process(self, *args, **kwargs):
-        frame = kwargs.get('frame')
+        bot_pos_minimap = kwargs.get('bot_pos_minimap')
+
         if self.steps[self.step_idx] == 'click_gate':
             pyautogui.moveTo(1654, 912)
             pyautogui.click(button='right')
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_gate':
-            if is_bot_icon_in_place(frame, 'gate'):
+            if is_bot_icon_in_place(bot_pos_minimap, 'gate'):
                 self.set_result(1, '')  # finished
             else:
-                bot_x, bot_y = get_bot_icon_position(frame)
-                if None not in [bot_x, bot_y]:
-                    try:
-                        idx = self.diff_values.index(None)
-                        val = abs(1654 - bot_x) + abs(912 - bot_y)
-                        self.diff_values[idx] = val
-                    except ValueError:
-                        # all values are gathered
-                        if self.diff_values[-1] >= self.diff_values[0]:
-                            self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
-                        self.diff_values = [None] * len(self.diff_values)  # reset
+                try:
+                    idx = self.diff_values.index(None)
+                    val = abs(1654 - bot_pos_minimap[0]) + abs(912 - bot_pos_minimap[1])
+                    self.diff_values[idx] = val
+                except ValueError:
+                    # all values are gathered
+                    if self.diff_values[-1] >= self.diff_values[0]:
+                        self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
 
 
 class ActionEscapeBehindGate(Action):
@@ -1258,34 +1368,39 @@ class ActionEscapeBehindGate(Action):
         self.timeout1 = 5  # [sec]
 
     def can_be_started(self, *args, **kwargs):
-        # - frame is available
+        # - bot position available
+        # - bot position minimap available
         # - E spell not on cooldown
-        frame = kwargs.get('frame')
-        if type(frame) is not np.ndarray:
+        # - bot not at gate
+
+        try:
+            int(kwargs.get('bot_pos_frame')['circle'][1][0])   # x
+        except Exception:
             return False
 
-        cooldowns = get_cooldowns(frame)
-        if cooldowns['E']:
+        try:
+            int(kwargs.get('bot_pos_minimap')[0])   # x
+        except Exception:
+            return False
+
+        if kwargs.get('cooldowns')['E']:
+            return False
+
+        if is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate'):
             return False
 
         return True
 
     def process(self, *args, **kwargs):
-        frame = kwargs.get('frame')
+        bot_pos_frame = kwargs.get('bot_pos_frame')
+        bot_pos_minimap = kwargs.get('bot_pos_minimap')
+        cooldowns = kwargs.get('cooldowns')
+
         if self.steps[self.step_idx] == 'press_button':
             # get mouse position between bot and gate
-            bot_icon_pos = get_bot_icon_position(frame)
-            if None in bot_icon_pos:
-                self.set_result(-1, f'Could not detect bot icon position')
-                return
-            in_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-            positions, description = get_bot_positions(in_hsv)
-            if positions is None:
-                self.set_result(-1, description)
-                return
-            circle_pos = positions['circle'][1]
+            circle_pos = bot_pos_frame['circle'][1]
             gate_icon_pos = (1654, 912)
-            vector = (gate_icon_pos[0] - bot_icon_pos[0], gate_icon_pos[1] - bot_icon_pos[1])
+            vector = (gate_icon_pos[0] - bot_pos_minimap[0], gate_icon_pos[1] - bot_pos_minimap[1])
             mouse_pos = (circle_pos[0] + vector[0], circle_pos[1] + vector[1])
             # button
             pyautogui.moveTo(mouse_pos[0], mouse_pos[1])
@@ -1302,7 +1417,6 @@ class ActionEscapeBehindGate(Action):
                 self.t1 = None
 
         elif self.steps[self.step_idx] == 'spell_cooldown':
-            cooldowns = get_cooldowns(frame)
             if cooldowns['E']:
                 self.step_idx += 1
                 self.t1 = None
@@ -1320,20 +1434,17 @@ class ActionEscapeBehindGate(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_gate':
-            if is_bot_icon_in_place(frame, 'gate'):
+            if is_bot_icon_in_place(bot_pos_minimap, 'gate'):
                 self.set_result(1, '')  # finished
             else:
-                bot_x, bot_y = get_bot_icon_position(frame)
-                if None not in [bot_x, bot_y]:
-                    try:
-                        idx = self.diff_values.index(None)
-                        val = abs(1654 - bot_x) + abs(912 - bot_y)
-                        self.diff_values[idx] = val
-                    except ValueError:
-                        # all values are gathered
-                        if self.diff_values[-1] >= self.diff_values[0]:
-                            self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
-                        self.diff_values = [None] * len(self.diff_values)  # reset
+                try:
+                    idx = self.diff_values.index(None)
+                    val = abs(1654 - bot_pos_minimap[0]) + abs(912 - bot_pos_minimap[1])
+                    self.diff_values[idx] = val
+                except ValueError:
+                    # all values are gathered
+                    if self.diff_values[-1] >= self.diff_values[0]:
+                        self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
 
 
 class ActionUseSpellD(Action):
@@ -1349,19 +1460,29 @@ class ActionUseSpellD(Action):
 
     def can_be_started(self, *args, **kwargs):
         # - frame is available
-        # - D not on cooldown
+        # - spell D not on cooldown
+        # - bots' health < max
+
         frame = kwargs.get('frame')
         if type(frame) is not np.ndarray:
             return False
 
-        cooldowns = get_cooldowns(frame)
-        if cooldowns['D']:
+        if kwargs.get('cooldowns')['D']:
+            return False
+
+        try:
+            int(kwargs.get('bot_health')[0])    # current
+        except Exception:
+            return False
+        if int(kwargs.get('bot_health')[0]) > 0.95*int(kwargs.get('bot_health')[1]):
             return False
 
         return True
 
     def process(self, *args, **kwargs):
         frame = kwargs.get('frame')
+        cooldowns = kwargs.get('cooldowns')
+
         if self.steps[self.step_idx] == 'press_button':
             pyautogui.moveTo(SCREEN_W // 2, SCREEN_H // 2)
             pyautogui.click(button='left')
@@ -1390,41 +1511,43 @@ class ActionUseSpellD(Action):
                     self.set_result(-1, f'Could not detect spell_blocked symbol for {self.timeout1} sec.')
 
         elif self.steps[self.step_idx] == 'spell_cooldown':
-            cooldowns = get_cooldowns(frame)
             if cooldowns['D']:
                 self.set_result(1, '')
 
 
 class ActionMove(Action):
-    def __init__(self):
+    def __init__(self, direction):
         super().__init__()
+        self.direction = direction
         self.steps = [
             'click_position',
             'at_position'
         ]
         self.x, self.y = None, None
+        self.t1 = None
+        self.timeout1 = 3  # [sec]
 
     def can_be_started(self, *args, **kwargs):
-        # - frame is available
-        # - direction is defined, can be reached
-        frame = kwargs.get('frame')
-        if type(frame) is not np.ndarray:
+        # - bot position minimap available
+        # - move direction can be reached
+
+        try:
+            int(kwargs.get('bot_pos_minimap')[0])   # x
+        except Exception:
             return False
 
-        direction = kwargs.get('direction')
-        if direction not in ['up', 'down', 'right', 'left', 'up-right', 'down-right', 'up-left', 'down-left']:
-            return False
-        x, y = get_move_position(frame, direction)
-        if None in [x, y]:
+        try:
+            int(get_move_position(kwargs.get('bot_pos_minimap'), self.direction)[0])  # x
+        except Exception:
             return False
 
         return True
 
     def process(self, *args, **kwargs):
-        frame = kwargs.get('frame')
-        direction = kwargs.get('direction')
-        if self.x is None and self.y is None:
-            self.x, self.y = get_move_position(frame, direction)
+        bot_pos_minimap = kwargs.get('bot_pos_minimap')
+
+        if self.x is None or self.y is None:
+            self.x, self.y = get_move_position(bot_pos_minimap, self.direction)
 
         if self.steps[self.step_idx] == 'click_position':
             pyautogui.moveTo(self.x, self.y)
@@ -1432,11 +1555,123 @@ class ActionMove(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_position':
-            x, y = get_bot_icon_position(frame)
-            if self.x - 2 <= x <= self.x + 2 and self.y - 2 <= y <= self.y + 2:
+            x, y = bot_pos_minimap
+            if self.x - 4 <= x <= self.x + 4 and self.y - 4 <= y <= self.y + 4:
                 self.set_result(1, '')  # finished
 
+            # timeout?
+            if self.t1 is None:
+                self.t1 = time.time()
+            if time.time() - self.t1 >= self.timeout1:
+                self.set_result(-1, f'Reached timeout: {self.timeout1} sec.')
 
+
+class ActionRunMiddle(Action):
+    def __init__(self):
+        super().__init__()
+        self.steps = [
+            'click_middle',
+            'at_middle'
+        ]
+        self.diff_values = [None] * 10
+
+    def can_be_started(self, *args, **kwargs):
+        # - bot pos icon is available
+        # - bot not at middle
+
+        try:
+            int(kwargs.get('bot_pos_minimap')[0])  # x
+        except Exception:
+            return False
+
+        if is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'middle'):
+            return False
+
+        return True
+
+    def process(self, *args, **kwargs):
+        bot_pos_minimap = kwargs.get('bot_pos_minimap')
+
+        if self.steps[self.step_idx] == 'click_middle':
+            pyautogui.moveTo(1723, 896)
+            pyautogui.click(button='right')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'at_middle':
+            if is_bot_icon_in_place(bot_pos_minimap, 'middle'):
+                self.set_result(1, '')  # finished
+            else:
+                try:
+                    idx = self.diff_values.index(None)
+                    val = abs(1723 - bot_pos_minimap[0]) + abs(896 - bot_pos_minimap[1])
+                    self.diff_values[idx] = val
+                except ValueError:
+                    # all values are gathered
+                    if self.diff_values[-1] >= self.diff_values[0]:
+                        self.set_result(-1, f'Bot is not moving towards middle since {len(self.diff_values)} frames')
+
+
+class ActionCollectGlobes(Action):
+    def __init__(self):
+        super().__init__()
+        self.steps = [
+            'click_target',
+            'at_target'
+        ]
+        self.point_target = None
+        self.diff_values = [None] * 10
+
+    def can_be_started(self, *args, **kwargs):
+        # - bot position available
+        # - bot icon position available
+        # - at least one red minion
+
+        try:
+            int(kwargs.get('bot_pos_frame')['bounding_box'][1][0])   # x
+        except Exception:
+            return False
+
+        try:
+            int(kwargs.get('bot_pos_minimap')[0])   # x
+        except Exception:
+            return False
+
+        try:
+            int(kwargs.get('minions')['red'][0][0])   # x
+        except Exception:
+            return False
+
+        return True
+
+    def process(self, *args, **kwargs):
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box'][1]    # (center_x, center_y)
+        bot_pos_minimap = kwargs.get('bot_pos_minimap')
+        minions = kwargs.get('minions')
+
+        if self.point_target is None:
+            # get position in the center of the group
+            point_center = get_center_point_for_spell(minions, bot_pos, 'Q')
+            diff = (point_center[0]-bot_pos[0]) // 16, (point_center[1]-bot_pos[1]) // 16,
+            self.point_target = (bot_pos_minimap[0] + diff[0], bot_pos_minimap[1] + diff[1])
+
+        if self.steps[self.step_idx] == 'click_target':
+            pyautogui.moveTo(self.point_target)
+            pyautogui.click(button='right')
+            self.step_idx += 1
+
+        elif self.steps[self.step_idx] == 'at_target':
+            x, y = bot_pos_minimap
+            if self.point_target[0]-4 <= x <= self.point_target[0]+4 and self.point_target[1]-4 <= y <= self.point_target[1]+4:
+                self.set_result(1, '')  # finished
+            else:
+                try:
+                    idx = self.diff_values.index(None)
+                    val = abs(self.point_target[0] - x) + abs(self.point_target[1] - y)
+                    self.diff_values[idx] = val
+                except ValueError:
+                    # all values are gathered
+                    if self.diff_values[-1] >= self.diff_values[0]:
+                        self.set_result(-1, f'Bot is not moving towards target since {len(self.diff_values)} frames')
 
 
 # import cv2 as cv
