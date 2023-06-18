@@ -578,6 +578,168 @@ print(get_cooldowns(frame))
     return out
 
 
+def get_xp_from_level(in_frame, **kwargs) -> int:
+    """
+    in: kwargs.get('xp_prev')
+    out: xp
+    @Note: if 'xp_prev' is available then returns greater value
+
+import cv2 as cv
+from functions import get_xp_from_level
+file_path = f'imgs\\detect\\xp\\780.png'
+frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+print(get_xp_from_level(frame, xp_prev=0))
+    """
+
+    def calculate_xp_value(in_level, in_progress):
+        if in_level == 1:
+            curr_sum, next_sum = 0, 2010
+        elif in_level == 2:
+            curr_sum, next_sum = 2010, 2154
+        elif in_level == 3:
+            curr_sum, next_sum = 4164, 2154
+        elif in_level == 4:
+            curr_sum, next_sum = 6318, 2154
+        elif in_level == 5:
+            curr_sum, next_sum = 8472, 2154
+        elif in_level == 6:
+            curr_sum, next_sum = 10626, 3303
+        elif in_level == 7:
+            curr_sum, next_sum = 13929, 3303
+        elif in_level == 8:
+            curr_sum, next_sum = 17232, 3303
+        elif in_level == 9:
+            curr_sum, next_sum = 20535, 3303
+        elif in_level == 10:
+            curr_sum, next_sum = 23838, 3303
+        elif in_level == 11:
+            curr_sum, next_sum = 27141, 4452
+        elif in_level == 12:
+            curr_sum, next_sum = 31593, 4452
+        elif in_level == 13:
+            curr_sum, next_sum = 36045, 4452
+        elif in_level == 14:
+            curr_sum, next_sum = 40497, 4452
+        elif in_level == 15:
+            curr_sum, next_sum = 44949, 4452
+        elif in_level == 16:
+            curr_sum, next_sum = 49401, 5600
+        elif in_level == 17:
+            curr_sum, next_sum = 55001, 5600
+        elif in_level == 18:
+            curr_sum, next_sum = 60601, 5600
+        elif in_level == 19:
+            curr_sum, next_sum = 66201, 5600
+        elif in_level == 20:
+            curr_sum, next_sum = 71801, 9000
+        elif in_level == 21:
+            curr_sum, next_sum = 80801, 10000
+        elif in_level == 22:
+            curr_sum, next_sum = 90801, 11500
+        elif in_level == 23:
+            curr_sum, next_sum = 102301, 13000
+        elif in_level == 24:
+            curr_sum, next_sum = 115301, 15000
+        elif in_level == 25:
+            curr_sum, next_sum = 130301, 17000
+        elif in_level == 26:
+            curr_sum, next_sum = 147301, 19500
+        elif in_level == 27:
+            curr_sum, next_sum = 166801, 22000
+        elif in_level == 28:
+            curr_sum, next_sum = 188801, 25000
+        elif in_level == 29:
+            curr_sum, next_sum = 213801, 28000
+        else:   # in_level == 30
+            curr_sum, next_sum = 241801, 0
+
+        return int('%d' % (curr_sum + in_progress*next_sum))   # get values before comma
+    # LEVEL detection  -----------------------------------
+    # get part of image
+    x_min, y_min, x_max, y_max = 865, 25, 920, 64
+    img = in_frame[y_min:y_max, x_min:x_max]
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    # get positions of numbers
+    out = []  # (x,y,number)
+    threshold = 0.8
+    for idx, template in enumerate([template_H33_num_0, template_H33_num_1, template_H33_num_2,
+                                    template_H33_num_3, template_H33_num_4, template_H33_num_5,
+                                    template_H33_num_6, template_H33_num_7, template_H33_num_8,
+                                    template_H33_num_9]):
+        res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
+        loc = np.where(res >= threshold)
+        for pt in zip(*loc[::-1]):
+            out.append((pt[0], pt[1], idx))
+    if len(out) == 0:
+        raise Exception('No numbers (H33) detected')
+    # sort numbers (by x position)
+    out.sort(key=lambda x: x[0])
+    # filter only unique matches (if the same number is detected too close, means it is the same number)
+    out_filtered = []
+    prev_x, prev_y, prev_num = None, None, None
+    for x, y, num in out:
+        if prev_num is None:
+            prev_x, prev_y, prev_num = x, y, num
+            out_filtered.append((x, y, num))    # first number
+        else:
+            if num != prev_num:
+                out_filtered.append((x, y, num))    # different number
+            else:   # same number
+                if abs(x-prev_x) >= 10:   # x-shifted in image ==> different number
+                    out_filtered.append((x, y, num))
+            prev_x, prev_y, prev_num = x, y, num
+    if len(out_filtered) > 2:
+        raise Exception('More than 2 numbers (H33) detected')
+    # final value
+    level = int(''.join([str(num) for (x, y, num) in out_filtered]))
+
+    # BAR detection -----------------------------------
+    # get part of image
+    x_min, y_min, x_max, y_max = 838, 5, 838+81, 5+12
+    img = in_frame[y_min:y_max, x_min:x_max]
+    hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+    color_thr = [np.array([90, 80, 90]), np.array([180, 255, 255])]
+    mask = cv.inRange(hsv, color_thr[0], color_thr[1])
+    # get rid of 'edges' pixels (h,w)
+    blank_pixels_left = [(2,0), (3,0), (4,0),(4,0), (5,0),(5,1),(5,2), (6,0),(6,1),(6,2), (7,0),(7,1),(7,2),(7,3), (8,0),(8,1),(8,2),(8,3), (9,0),(9,1),(9,2),(9,3),(9,4), (10,0),(10,1),(10,2),(10,3),(10,4), (11,0),(11,1),(11,2),(11,3),(11,4),(11,5)]
+    blank_pixels_right = [(0,75),(0,76),(0,77),(0,78),(0,79),(0,80), (1,76),(1,77),(1,78),(1,79),(1,80), (2,76),(2,77),(2,78),(2,79),(2,80), (3,77),(3,78),(3,79),(3,80), (4,77),(4,78),(4,79),(4,80), (5,78),(5,79),(5,80), (6,78),(6,79),(6,80), (7,79),(7,80), (8,79),(8,80), (9,80)]
+    for h, w in blank_pixels_left: mask[h, w] = 0
+    for h, w in blank_pixels_right: mask[h, w] = 0
+    # find the lowest, most right pixel in the mask
+    idx = None
+    for h in range(mask.shape[0]-1, 0, -1):
+        for w in range(mask.shape[1]-1, 0, -1):
+            if mask[h][w] > 100:
+                # check if there is SOLID line of pixels reaching the left blank edge
+                left_w = None
+                tmp = [pixel_w for pixel_h, pixel_w in blank_pixels_left if pixel_h == h]    # pixels with the same height
+                if len(tmp) > 0:
+                    left_w = max(tmp)   # pixel closest to center
+                else:
+                    left_w = -1
+                if all(val > 100 for val in mask[h][left_w+1: w+1]):
+                    idx = w
+            if idx:
+                break
+        if idx:
+            break
+    # compensate idx value
+    if idx is None:
+        idx = 0     # did not find the bar's pixel color -> just started number
+    if idx + 1 <= mask.shape[1]:
+        idx += 1
+    # final value
+    progress = idx / mask.shape[1]
+
+    # xp value
+    xp = calculate_xp_value(level, progress)
+    xp_prev = kwargs.get('xp_prev')
+    if xp_prev is None:
+        return xp
+    else:
+        return max(xp, xp_prev)
+
+
 def get_total_xp_value(in_frame):
     """
     out: xp_value
@@ -604,9 +766,12 @@ print(get_total_xp_value(frame))
         loc = np.where(res >= threshold)
         for pt in zip(*loc[::-1]):
             out.append((pt[0], pt[1], idx))
+
+    if len(out) == 0:
+        return 0    # no numbers found
+
     #   sort numbers (by x position)
     out.sort(key=lambda x: x[0])
-
     # create final value
     return int(''.join([str(num) for (x, y, num) in out]))
 
@@ -677,7 +842,7 @@ print(get_bot_icon_position(frame))
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get positions of template
-    threshold = 0.62
+    threshold = 0.58
     template = template_bot_icon
     x_shift, y_shit = template.shape[1] // 2, template.shape[0] // 2 + 6
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
@@ -695,7 +860,8 @@ def is_bot_icon_in_place(position: tuple, in_place: str) -> bool:
     """
     x, y = position
     if type(x) is not int or type(y) is not int:
-        raise Exception(f'Invalid input type: x={x}, y={y}')
+        # TODO: raise Exception(f'Invalid input type: x={x}, y={y}')
+        return False
 
     if in_place == 'gate':
         x_min, y_min, x_max, y_max = 1651, 899, 1651 + 6, 899 + 17
@@ -719,7 +885,8 @@ def is_bot_icon_in_place(position: tuple, in_place: str) -> bool:
             return False
 
     else:
-        raise Exception(f'Invalid input: in_place={in_place}')
+        # TODO: raise Exception(f'Invalid input: in_place={in_place}')
+        return False
 
 
 def get_well_position(in_frame):
@@ -985,7 +1152,8 @@ class Actions:
                 out.append(name)
         return out
 
-    def start(self, action_name, *args, **kwargs):
+    def start(self, action_name):
+        """! IMPORTANT: make sure that action can be started with function: action.can_be_started() !"""
         if self.current_action is None:
             action = self.objects[action_name]
 
@@ -996,22 +1164,24 @@ class Actions:
             else:
                 action.__init__()
 
-            if action.can_be_started(*args, **kwargs):
-                self.current_action = action
-                self.current_action.start()
-                return True
-        return False
+            # start action
+            self.current_action = action
+            self.current_action.start()
+            return True, ''
+
+        else:
+            return False, 'current_action is not None'
 
     def process(self, *args, **kwargs):
         if self.current_action is not None:
             # finished?
             if self.current_action.result in [-1, 1]:
-                self.printout()
+                #self.printout()
                 self.current_action = None
             # timeout?
             elif time.time() - self.current_action.t0 >= self.current_action.TIMEOUT:
                 self.current_action.set_result(-1, f'Reached timeout = {self.current_action.TIMEOUT} sec.')
-                self.printout()
+                #self.printout()
                 self.current_action = None
             # process...
             else:
@@ -1041,20 +1211,28 @@ class ActionBasicAttack(Action):
         # - bot position available
         # - at least one red minion
 
-        try:
-            int(kwargs.get('bot_pos_frame')['bounding_box'][1][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_frame'):
+            if kwargs.get('bot_pos_frame')['bounding_box']:
+                if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:
+                    pass
+                else: return False, "bot_pos_frame['bounding_box'][0] is not integer"
+            else: return False, "bot_pos_frame['bounding_box'] is None"
+        else: return False, "bot_pos_frame is None"
 
-        try:
-            int(kwargs.get('minions')['red'][0][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('minions'):
+            if kwargs.get('minions')['red']:
+                if kwargs.get('minions')['red'][0]:
+                    if type(kwargs.get('minions')['red'][0][0]) is int:
+                        pass
+                    else: return False, "minions['red'][0][0] is not integer"
+                else: return False, "minions['red'][0] is None"
+            else: return False, "minions['red'] is None"
+        else: return False, "minions is None"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
-        bot_x, bot_y = kwargs.get('bot_pos_frame')['bounding_box'][1]    # (center x, center y)
+        bot_x, bot_y = kwargs.get('bot_pos_frame')['bounding_box']    # (center x, center y)
         minions = kwargs.get('minions')['red']
 
         # get the position of the closest red minion == target
@@ -1094,24 +1272,35 @@ class ActionQAttack(Action):
         # - at least one red minion
         # - Q spell available
 
-        try:
-            int(kwargs.get('bot_pos_frame')['bounding_box'][1][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_frame'):
+            if kwargs.get('bot_pos_frame')['bounding_box']:
+                if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:
+                    pass
+                else: return False, "bot_pos_frame['bounding_box'][0] is not integer"
+            else: return False, "bot_pos_frame['bounding_box'] is None"
+        else: return False, "bot_pos_frame is None"
 
-        try:
-            int(kwargs.get('minions')['red'][0][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('minions'):
+            if kwargs.get('minions')['red']:
+                if kwargs.get('minions')['red'][0]:
+                    if type(kwargs.get('minions')['red'][0][0]) is int:
+                        pass
+                    else: return False, "minions['red'][0][0] is not integer"
+                else: return False, "minions['red'][0] is None"
+            else: return False, "minions['red'] is None"
+        else: return False, "minions is None"
 
-        if kwargs.get('cooldowns')['Q']:
-            return False
+        if kwargs.get('cooldowns'):
+            if not kwargs.get('cooldowns')['Q']:
+                pass
+            else: return False, "cooldowns['Q'] is True"
+        else: return False, "cooldowns is None"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         minions = kwargs.get('minions')
-        bot_pos = kwargs.get('bot_pos_frame')['bounding_box'][1]    # (center_x, center_y)
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']    # (center_x, center_y)
         cooldowns = kwargs.get('cooldowns')
 
         if self.point_attack is None:
@@ -1147,24 +1336,35 @@ class ActionWAttack(Action):
         # - at least one red minion
         # - W spell available
 
-        try:
-            int(kwargs.get('bot_pos_frame')['bounding_box'][1][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_frame'):
+            if kwargs.get('bot_pos_frame')['bounding_box']:
+                if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:
+                    pass
+                else: return False, "bot_pos_frame['bounding_box'][0] is not integer"
+            else: return False, "bot_pos_frame['bounding_box'] is None"
+        else: return False, "bot_pos_frame is None"
 
-        try:
-            int(kwargs.get('minions')['red'][0][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('minions'):
+            if kwargs.get('minions')['red']:
+                if kwargs.get('minions')['red'][0]:
+                    if type(kwargs.get('minions')['red'][0][0]) is int:
+                        pass
+                    else: return False, "minions['red'][0][0] is not integer"
+                else: return False, "minions['red'][0] is None"
+            else: return False, "minions['red'] is None"
+        else: return False, "minions is None"
 
-        if kwargs.get('cooldowns')['W']:
-            return False
+        if kwargs.get('cooldowns'):
+            if not kwargs.get('cooldowns')['W']:
+                pass
+            else: return False, "cooldowns['W'] is True"
+        else: return False, "cooldowns is None"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         minions = kwargs.get('minions')
-        bot_pos = kwargs.get('bot_pos_frame')['bounding_box'][1]    # (center_x, center_y)
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']    # (center_x, center_y)
         cooldowns = kwargs.get('cooldowns')
 
         if self.point_attack is None:
@@ -1203,26 +1403,33 @@ class ActionUseWell(Action):
         # - well not on cooldown
         # - bot's health < max
 
-        frame = kwargs.get('frame')
-        if type(frame) is not np.ndarray:
-            return False
+        if kwargs.get('frame') is not None:
+            if type(kwargs.get('frame')) is np.ndarray:
+                pass
+            else: return False, 'frame is not np.ndarray'
+        else: return False, 'frame is None'
 
-        try:
-            int(kwargs.get('bot_pos_minimap')[0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_minimap'):
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+                pass
+            else: return False, "bot_pos_minimap[0] is not integer"
+        else: return False, "bot_pos_minimap is None"
 
-        if kwargs.get('cooldowns')['well']:
-            return False
+        if kwargs.get('cooldowns'):
+            if not kwargs.get('cooldowns')['well']:
+                pass
+            else: return False, "cooldowns['well'] is True"
+        else: return False, "cooldowns is None"
 
-        try:
-            int(kwargs.get('bot_health')[0])    # current
-        except Exception:
-            return False
-        if int(kwargs.get('bot_health')[0]) > 0.95*int(kwargs.get('bot_health')[1]):
-            return False
+        if kwargs.get('bot_health'):
+            if type(kwargs.get('bot_health')[0]) is int:    # current
+                if int(kwargs.get('bot_health')[0]) < 0.9 * int(kwargs.get('bot_health')[1]):  # current < max
+                    pass
+                else: return False, "bot_health: current value > 0.9*max value"
+            else: return False, "bot_health[0] is not integer"
+        else: return False, "bot_health is None"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         frame = kwargs.get('frame')
@@ -1270,19 +1477,23 @@ class ActionHideInBushes(Action):
         # - bot_pos_minimap is available
         # - bot not in bushes
 
-        frame = kwargs.get('frame')
-        if type(frame) is not np.ndarray:
-            return False
+        if kwargs.get('frame') is not None:
+            if type(kwargs.get('frame')) is np.ndarray:
+                pass
+            else: return False, 'frame is not np.ndarray'
+        else: return False, 'frame is None'
 
-        try:
-            int(kwargs.get('bot_pos_minimap')[0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_minimap'):
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+                pass
+            else: return False, "bot_pos_minimap[0] is not integer"
+        else: return False, "bot_pos_minimap is None"
 
-        if is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'bush'):
-            return False
+        if not is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'bush'):
+            pass
+        else: return False, "bot is already in bushes"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         frame = kwargs.get('frame')
@@ -1321,15 +1532,17 @@ class ActionHideBehindGate(Action):
         # - bot pos icon is available
         # - bot not at gate
 
-        try:
-            int(kwargs.get('bot_pos_minimap')[0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_minimap'):
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+                pass
+            else: return False, "bot_pos_minimap[0] is not integer"
+        else: return False, "bot_pos_minimap is None"
 
-        if is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate'):
-            return False
+        if not is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate'):
+            pass
+        else: return False, "bot is already at gate"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
@@ -1373,23 +1586,31 @@ class ActionEscapeBehindGate(Action):
         # - E spell not on cooldown
         # - bot not at gate
 
-        try:
-            int(kwargs.get('bot_pos_frame')['circle'][1][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_frame'):
+            if kwargs.get('bot_pos_frame')['circle']:
+                if type(kwargs.get('bot_pos_frame')['circle'][0]) is int:		# x
+                    pass
+                else: return False, "bot_pos_frame['circle'][0] is not integer"
+            else: return False, "bot_pos_frame['circle'] is None"
+        else: return False, "bot_pos_frame is None"
 
-        try:
-            int(kwargs.get('bot_pos_minimap')[0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_minimap'):
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+                pass
+            else: return False, "bot_pos_minimap[0] is not integer"
+        else: return False, "bot_pos_minimap is None"
 
-        if kwargs.get('cooldowns')['E']:
-            return False
+        if kwargs.get('cooldowns'):
+            if not kwargs.get('cooldowns')['E']:
+                pass
+            else: return False, "cooldowns['E'] is True"
+        else: return False, "cooldowns is None"
 
-        if is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate'):
-            return False
+        if not is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate'):
+            pass
+        else: return False, "bot is already at gate"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         bot_pos_frame = kwargs.get('bot_pos_frame')
@@ -1398,7 +1619,7 @@ class ActionEscapeBehindGate(Action):
 
         if self.steps[self.step_idx] == 'press_button':
             # get mouse position between bot and gate
-            circle_pos = bot_pos_frame['circle'][1]
+            circle_pos = bot_pos_frame['circle']
             gate_icon_pos = (1654, 912)
             vector = (gate_icon_pos[0] - bot_pos_minimap[0], gate_icon_pos[1] - bot_pos_minimap[1])
             mouse_pos = (circle_pos[0] + vector[0], circle_pos[1] + vector[1])
@@ -1463,21 +1684,27 @@ class ActionUseSpellD(Action):
         # - spell D not on cooldown
         # - bots' health < max
 
-        frame = kwargs.get('frame')
-        if type(frame) is not np.ndarray:
-            return False
+        if kwargs.get('frame') is not None:
+            if type(kwargs.get('frame')) is np.ndarray:
+                pass
+            else: return False, 'frame is not np.ndarray'
+        else: return False, 'frame is None'
 
-        if kwargs.get('cooldowns')['D']:
-            return False
+        if kwargs.get('cooldowns'):
+            if not kwargs.get('cooldowns')['D']:
+                pass
+            else: return False, "cooldowns['D'] is True"
+        else: return False, "cooldowns is None"
 
-        try:
-            int(kwargs.get('bot_health')[0])    # current
-        except Exception:
-            return False
-        if int(kwargs.get('bot_health')[0]) > 0.95*int(kwargs.get('bot_health')[1]):
-            return False
+        if kwargs.get('bot_health'):
+            if type(kwargs.get('bot_health')[0]) is int:    # current
+                if int(kwargs.get('bot_health')[0]) < 0.9 * int(kwargs.get('bot_health')[1]):  # current < max
+                    pass
+                else: return False, "bot_health: current value > 0.9*max value"
+            else: return False, "bot_health[0] is not integer"
+        else: return False, "bot_health is None"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         frame = kwargs.get('frame')
@@ -1531,17 +1758,17 @@ class ActionMove(Action):
         # - bot position minimap available
         # - move direction can be reached
 
-        try:
-            int(kwargs.get('bot_pos_minimap')[0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_minimap'):
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+                pass
+            else: return False, "bot_pos_minimap[0] is not integer"
+        else: return False, "bot_pos_minimap is None"
 
-        try:
-            int(get_move_position(kwargs.get('bot_pos_minimap'), self.direction)[0])  # x
-        except Exception:
-            return False
+        if None not in get_move_position(kwargs.get('bot_pos_minimap'), self.direction):
+            pass
+        else: return False, "direction unreachable"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
@@ -1579,15 +1806,18 @@ class ActionRunMiddle(Action):
         # - bot pos icon is available
         # - bot not at middle
 
-        try:
-            int(kwargs.get('bot_pos_minimap')[0])  # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_minimap'):
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+                pass
+            else: return False, "bot_pos_minimap[0] is not integer"
+        else: return False, "bot_pos_minimap is None"
 
-        if is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'middle'):
-            return False
+        if not is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'middle'):
+            pass
+        else:
+            return False, "bot is already in middle"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
@@ -1626,25 +1856,34 @@ class ActionCollectGlobes(Action):
         # - bot icon position available
         # - at least one red minion
 
-        try:
-            int(kwargs.get('bot_pos_frame')['bounding_box'][1][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_frame'):
+            if kwargs.get('bot_pos_frame')['bounding_box']:
+                if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:		# x
+                    pass
+                else: return False, "bot_pos_frame['bounding_box'][0] is not integer"
+            else: return False, "bot_pos_frame['bounding_box'] is None"
+        else: return False, "bot_pos_frame is None"
 
-        try:
-            int(kwargs.get('bot_pos_minimap')[0])   # x
-        except Exception:
-            return False
+        if kwargs.get('bot_pos_minimap'):
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+                pass
+            else: return False, "bot_pos_minimap[0] is not integer"
+        else: return False, "bot_pos_minimap is None"
 
-        try:
-            int(kwargs.get('minions')['red'][0][0])   # x
-        except Exception:
-            return False
+        if kwargs.get('minions'):
+            if kwargs.get('minions')['red']:
+                if kwargs.get('minions')['red'][0]:
+                    if type(kwargs.get('minions')['red'][0][0]) is int:
+                        pass
+                    else: return False, "minions['red'][0][0] is not integer"
+                else: return False, "minions['red'][0] is None"
+            else: return False, "minions['red'] is None"
+        else: return False, "minions is None"
 
-        return True
+        return True, ''
 
     def process(self, *args, **kwargs):
-        bot_pos = kwargs.get('bot_pos_frame')['bounding_box'][1]    # (center_x, center_y)
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']    # (center_x, center_y)
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
         minions = kwargs.get('minions')
 

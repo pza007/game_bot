@@ -7,6 +7,7 @@
 #       - if bot dead -> wait for alive, move to gate, demount (press y), check xp gain, refresh forts
 #       - save records to file, clear data
 import random
+import time
 
 from window_capture import WindowCapture
 import cv2 as cv
@@ -26,38 +27,90 @@ class Spectator:
         self.window = WindowCapture('Heroes of the Storm')
         self.actions = Actions()
         self.data = {}
-        self.buffer = []
         self.t_start = None
-        self.iteration = None
 
-        # do not reset!
-        self.__xp = self.get_current_xp()
+        # do not change!
         self.__TIMEOUT = 30   # sec
-        self.__max_iterations = 2
 
-    def run(self):
-        # init values
-        self.t_start = time.time()
-        self.iteration = 0
-
-        while self.iteration < self.__max_iterations:
-
-            self.get_data()
-
-            # end conditions
+    def init_game(self):
+        def wait_bot_alive(max_time=30):
             if self.data['bot_dead']:
-                self.cleanup('dead')
-                self.t_start = time.time()
-                self.iteration += 1
-
-            elif time.time() - self.t_start >= self.__TIMEOUT:
-                self.cleanup('timeout')
-                self.t_start = time.time()
-                self.iteration += 1
-
+                t0 = time.time()
+                while time.time() - t0 < max_time:
+                    self.get_data()
+                    if not self.data['bot_dead']:
+                        pyautogui.press('y')  # demount
+                        return
+                raise Exception(f'Bot still dead after {max_time} sec of waiting')
             else:
-                self.execute_action()
+                return
 
+        def wait_bot_stopped(max_time=10):
+            # stop command
+            pyautogui.moveTo(SCREEN_W // 2, SCREEN_H // 2)
+            pyautogui.click(button='left')
+            pyautogui.press('s')
+
+            t0 = time.time()
+            prev_pos = self.data['bot_pos_minimap']
+            while time.time() - t0 < max_time:
+                self.get_data()
+                new_pos = self.data['bot_pos_minimap']
+                if (abs(new_pos[0]-prev_pos[0]) + abs(new_pos[1]-prev_pos[1])) < 5:  # pixels
+                    return
+                prev_pos = new_pos
+            raise Exception(f'Bot still not stopped after {max_time} sec of waiting')
+
+        def wait_bot_at_gate(max_time=20):
+            self.get_data()
+            self.actions = Actions()
+            #f_can, f_can_desc = self.actions.objects['hide_behind_gate'].can_be_started(**self.data)
+            f_started, f_started_desc = self.actions.start('hide_behind_gate')
+            if not f_started:
+                raise Exception(f_started_desc)
+
+            t0 = time.time()
+            while time.time() - t0 < max_time:
+                self.actions.process(**self.data)
+                self.get_data()
+                if self.actions.current_action is None:
+                    return
+            raise Exception(f'Bot still not at gate after {max_time} sec of waiting')
+
+        def refresh_forts(sleep_time=2):
+            pyautogui.moveTo(132, 442)
+            pyautogui.click(button='left')
+            time.sleep(sleep_time)
+
+        def wait_blue_minion_in_front(max_time=10):
+            t0 = time.time()
+            while time.time() - t0 < max_time:
+                self.get_data()
+                try:
+                    for (x, y) in self.data['minions']['blue']:
+                        if x > self.data['bot_pos_frame']['bounding_box'][0]:
+                            return
+                except Exception:
+                    pass
+            raise Exception(f'Blue minion still not in front of bot after {max_time} sec of waiting')
+
+        self.get_data()
+
+        # bot alive?
+        wait_bot_alive()
+        # bot stopped?
+        wait_bot_stopped()
+        # bot at gate?
+        wait_bot_at_gate()
+        # refresh_forts
+        refresh_forts()
+        # blue minion in front of bot?
+        wait_blue_minion_in_front()
+
+        # set initial values
+        self.actions = Actions()
+        self.data = {}
+        self.t_start = time.time()
 
     def get_data(self):
         # bot_dead          True or False
@@ -66,7 +119,8 @@ class Spectator:
         # bot_health        (curr, max)
         # bot_mana          (curr, max)
         # cooldowns         {'Q': False, 'W': False, 'E': False, 'R': False, 'D': False, 'well': False}
-        # minions           {color: [(x_center, y_center), ...] }
+        # minions           {'blue': [(x_center, y_center), ...], 'red': [(x_center, y_center), ...]}
+        # xp                value
 
         frame = self.window.get_screenshot()
         frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
@@ -77,15 +131,17 @@ class Spectator:
         bot_dead = is_bot_dead(frame)
         if not bot_dead:
             bot_pos_frame, desc = get_bot_positions(frame_hsv)
-            if not bot_pos_frame:
-                bot_pos_frame = {'health_bar': (None, None), 'bounding_box': (None, None), 'circle': (None, None)}
-
+            if bot_pos_frame:
+                bot_pos_frame = {'health_bar': bot_pos_frame['health_bar'][1],
+                                 'bounding_box': bot_pos_frame['bounding_box'][1],
+                                 'circle': bot_pos_frame['circle'][1]}
+            else:
+                bot_pos_frame = {'health_bar': (None, None),
+                                 'bounding_box': (None, None),
+                                 'circle': (None, None)}
             bot_pos_minimap = get_bot_icon_position(frame)   # (x, y) or (None, None)
-
             bot_health = get_bot_health_value(frame)   # (curr, max) or (None, None)
-
             bot_mana = get_bot_mana_value(frame)   # (curr, max) or (None, None)
-
             cooldowns = get_cooldowns(frame)    # {'Q': False, 'W': False, 'E': False, 'R': False, 'D': False, 'well': False}
         else:
             bot_pos_frame = {'health_bar': (None, None), 'bounding_box': (None, None), 'circle': (None, None)}
@@ -95,9 +151,10 @@ class Spectator:
             cooldowns = {'Q': True, 'W': True, 'E': True, 'R': True, 'D': True, 'well': True}
 
         # MINIONS
-        minions = get_minions_positions(frame, frame_hsv)
-        if not minions['red']:
-            minions['red'] = [(None, None)]
+        minions = get_minions_positions(frame, frame_hsv)   # {'blue': [(x_center, y_center), ...], 'red': [(x_center, y_center), ...]}
+
+        # XP
+        xp = get_xp_from_level(frame)
 
         self.data = {
             'frame': frame,
@@ -108,71 +165,116 @@ class Spectator:
             'bot_health': bot_health,
             'bot_mana': bot_mana,
             'cooldowns': cooldowns,
-            'minions': minions
+            'minions': minions,
+            'xp': xp
         }
 
-    def execute_action(self):
-        if not self.actions.current_action:
-            list_of_actions = self.actions.get_available_actions(**self.data)
-            action_name = list_of_actions[random.randint(0, len(list_of_actions)-1)]
+    def execute_action(self, action_name):
+        """
+        out: result, description, xp_gain
+        """
+        self.get_data()
+        xp_prev = self.data['xp']
 
-            if self.actions.start(action_name, **self.data):
-                self.actions.process(**self.data)
-                self.record(action_name)
-                print(f'Started action: {action_name}')
-
+        result, description = None, None
+        f_can, f_can_desc = self.actions.objects[action_name].can_be_started(**self.data)
+        if f_can:
+            f_started, f_started_desc = self.actions.start(action_name)
+            if f_started:
+                while self.actions.current_action is not None:
+                    self.actions.process(**self.data)
+                    self.get_data()
+                    if result is None and self.actions.current_action.result in [-1, 1]:
+                        result = self.actions.current_action.result
+                        description = self.actions.current_action.description
+                # exit when self.actions.current_action is None
+                xp_current = get_xp_from_level(self.data['frame'], xp_prev=xp_prev)
+                return result, description, xp_current-xp_prev
+            else:
+                return -1, f'Action failed at starting. Reason:{f_started_desc}', 0
         else:
-            self.actions.process(**self.data)
-            #self.actions.printout()
+            return -1, f'Action cannot be started. Reason:{f_can_desc}', 0
+        # self.actions.printout()
+        #list_of_actions = self.actions.get_available_actions(**self.data)
 
-    def record(self, action_name):
+    def is_game_finished(self):
         """
-        Record only if bot is alive and action started
+        out:  finished, reason
         """
-        # bot_pos_frame     (x, y)
-        # bot_pos_minimap   (x, y)
-        # bot_health        (curr, max)
-        # bot_mana          (curr, max)
-        # cooldowns         0 or 1   for 'Q','W','E','R','D','well'   e.g (0,0,0,0,0,1)
-        # minions           (x1, y1, x2, y2, x3, y3, ...)
-        # action            number:  0 = 'move_up'
-        #                            1 = 'move_down'
-        #                            2 = 'move_right'
-        #                            3 = 'move_left'
-        #                            4 = 'move_up-right'
-        #                            5 = 'move_down-right'
-        #                            6 = 'move_up-left'
-        #                            7 = 'move_down-left'
-        #                            8 = 'run_middle'
-        #                            9 = 'collect_globes'
-        #
-        #                           10 = 'basic_attack'
-        #                           11 = 'q_attack'
-        #                           12 = 'w_attack'
-        #
-        #                           13 = 'use_well'
-        #                           14 = 'hide_in_bushes'
-        #                           15 = 'hide_behind_gate'
-        #                           16 = 'escape_behind_gate'
-        #                           17 = 'use_spell_d'
+        self.get_data()
+        if self.data['bot_dead']:
+            return True, 'bot_dead'
+        if time.time() - self.t_start >= self.__TIMEOUT:
+            return True, 'timeout'
+        else:
+            return False, None
 
-        bot_pos_frame = self.data['bot_pos_frame']['circle'][1]
-        bot_pos_minimap = self.data['bot_pos_minimap']
-        bot_health = self.data['bot_health']
-        bot_mana = self.data['bot_mana']
-        cooldowns = tuple([int(val) for val in self.data['cooldowns'].values()])
-        minions = []
-        for x, y in self.data['minions']['red']:
-            minions.append(x)
-            minions.append(y)
-        minions = tuple(minions)
-        action = ['move_up', 'move_down', 'move_right', 'move_left', 'move_up-right', 'move_down-right',
-                  'move_up-left', 'move_down-left', 'run_middle', 'collect_globes',
-                  'basic_attack', 'q_attack', 'w_attack',
-                  'use_well', 'hide_in_bushes', 'hide_behind_gate', 'escape_behind_gate', 'use_spell_d'].index(action_name)
+    def get_game_state(self):
+        def get_vector_closest_minion(color):
+            x_bot, y_bot = self.data['bot_pos_frame']['bounding_box']
+            out = []
+            for x_minion, y_minion in self.data['minions'][color]:    # [(x_center, y_center), ...]
+                dist = get_distance_between_points((x_bot, y_bot), (x_minion, y_minion))
+                out.append((dist, (x_bot-x_minion, y_bot-y_minion)))
+            out.sort()
+            return out[0][1]
 
-        self.buffer.append([action, bot_pos_frame, bot_pos_minimap, bot_health, bot_mana, cooldowns, minions])
+        # (uint)            bot health current, max
+        # (uint)
+        # (uint)            bot mana current, max
+        # (uint)
+        # (int16)           vector (dx,dy) from gate to bot's icon  !(minimap)!
+        # (int16)
+        # (int16)           vector (dx,dy) from bot to the closest blue minion (screen)
+        # (int16)
+        # (int16)           vector (dx,dy) from bot to the closest red minion (screen)
+        # (int16)
+        # (0,1)             bot cooldowns
+        # (0,1)
+        # (0,1)
+        # (0,1)
+        # (0,1)
+        # (0,1)
+        out = [0]*16
+        # bot health
+        if None not in self.data['bot_health']:
+            out[0] = self.data['bot_health'][0]     # current
+            out[1] = self.data['bot_health'][1]     # max
+        # bot mana
+        if None not in self.data['bot_mana']:
+            out[2] = self.data['bot_mana'][0]     # current
+            out[3] = self.data['bot_mana'][1]     # max
+        # vector (dx,dy) from gate to bot's icon  !(minimap)!
+        if None not in self.data['bot_pos_minimap']:
+            gate_pos_minimap = (1654, 912)
+            bot_pos_minimap = self.data['bot_pos_minimap']  # (x,y)
+            out[4] = gate_pos_minimap[0] - bot_pos_minimap[0]   # dx
+            out[5] = gate_pos_minimap[1] - bot_pos_minimap[1]   # dy
+        if None not in self.data['bot_pos_frame']['bounding_box']:
+            # vector (dx,dy) from bot to the closest blue minion (screen)
+            if self.data['minions']['blue']:
+                out[6], out[7] = get_vector_closest_minion('blue')
+            # vector (dx,dy) from bot to the closest red minion (screen)
+            if self.data['minions']['red']:
+                out[8], out[9] = get_vector_closest_minion('red')
+        # bot cooldowns
+        out[10:] = tuple([int(val) for val in self.data['cooldowns'].values()])
 
+        return out
+
+    # obsolete functions
+    """
+    def get_current_xp(self):
+        # Note: to read value, need to move mouse to position (x=960, y=44) and wait 1.5 sec
+        pyautogui.moveTo(960, 44)
+        pyautogui.click(button='left')
+        time.sleep(1.5)
+        frame = self.window.get_screenshot()
+        return get_total_xp_value(frame)
+        
+    def get_xp_gain(self):
+        return self.get_current_xp() - self.xp_start
+        
     def store_data(self):
         xp_gain = self.get_xp_gain()
         filename = f'logs\\{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{xp_gain}.txt'
@@ -188,81 +290,6 @@ class Spectator:
         # reset
         self.data = {}
         self.buffer = []
+    """
 
-    def get_current_xp(self):
-        # Note: to read value, need to move mouse to position (x=960, y=44) and wait 1.5 sec
-        pyautogui.moveTo(960, 44)
-        pyautogui.click(button='left')
-        time.sleep(1.5)
-        frame = self.window.get_screenshot()
-        return get_total_xp_value(frame)
 
-    # function changes variable: self.__xp !!
-    def get_xp_gain(self):
-        xp_current = self.get_current_xp()
-        xp_gain = xp_current - self.__xp
-        self.__xp = xp_current
-        return xp_gain
-
-    def cleanup(self, reason):
-        def wait_bot_stopped(max_time=100):
-            if self.actions.current_action is not None:
-                self.actions.current_action.set_result(-1, 'Stopped.')
-            self.actions.current_action = None
-
-            pyautogui.moveTo(SCREEN_W // 2, SCREEN_H // 2)
-            pyautogui.click(button='left')
-            pyautogui.press('s')
-
-            prev_pos = (0, 0)
-            cnt = 1
-            for _ in range(max_time):
-                self.get_data()
-                new_pos = self.data['bot_pos_minimap']
-                if (abs(new_pos[0]-prev_pos[0]) + abs(new_pos[1]-prev_pos[1])) < 5:  # pixels
-                    break
-                prev_pos = new_pos
-                cnt += 1
-            if cnt == 100:
-                raise Exception(f'Bot still not stopped after {max_time} frames of waiting')
-
-        def wait_bot_alive(max_time=100):
-            for _ in range(max_time):
-                self.get_data()
-                if not self.data['bot_dead']:
-                    break
-            if self.data['bot_dead']:
-                raise Exception(f'Bot still dead after {max_time} frames of waiting')
-
-        def refresh_forts():
-            pyautogui.moveTo(132, 442)
-            pyautogui.click(button='left')
-            time.sleep(4)
-
-        def wait_bot_at_gate(max_time=100):
-            self.get_data()
-            self.actions = Actions()
-            self.actions.start('hide_behind_gate', **self.data)
-            for _ in range(max_time):
-                self.actions.process(**self.data)
-                self.get_data()
-                if self.actions.current_action is None:
-                    break
-            if self.actions.current_action is not None:
-                raise Exception(f'Bot still not at gate after {max_time} frames of waiting')
-
-        print('>> cleanup', reason)
-        self.store_data()
-
-        if reason == 'dead':
-            wait_bot_alive(200)         # wait until bot is alive again
-            refresh_forts()             # refresh_forts
-            pyautogui.press('y')        # demount
-            wait_bot_at_gate(200)       # wait until bot is at gate
-            return
-
-        else:   # timeout
-            wait_bot_stopped(100)       # wait until bot is stopped
-            refresh_forts()             # refresh_forts
-            wait_bot_at_gate(200)       # wait until bot is at gate
-            return

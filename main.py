@@ -1,33 +1,91 @@
-# TODO: plan for game
-#   0. No ally, no enemy, toggle ON minions, control panel hidden, talent tree hidden
-#   1. Refresh forts (unhide, hide control panel)
-#   2. Move to gate, demount
-#   3. Perform all actions
-#   ...
-#   When dead -> check total xp and start from step 1)
+# TODO
+#   - improve reward function
+#   -
+#   - in functions.py
+#       -> errors(previous exceptions) will be reported in logger
+#       -> ensure that functions are prepared for NONE type returns
 # ----------------------------------------------------------------------------------------------------------
+import keras
+from gym_lib import env
+from gym_lib import build_model, build_agent, train_agent
+import numpy as np
+import datetime
+
+
+"""
+episodes = 2
+for episode in range(1, episodes + 1):
+    print('Reset.....')
+    state = env.reset()
+    done = False
+    score = 0
+
+    while not done:
+        action = env.action_space.sample()
+        observation, reward, done, _, info = env.step(action)
+        score += reward
+        print(info['info'])
+    print('Episode:{} Score:{}'.format(episode, score))
+"""
+
+
+num_steps = 70
+# load model
+model = keras.models.load_model('rl/models/230618_222231_plus441.h5')
+
+states = env.observation_space.shape[0]
+actions = env.action_space.n
+#model = build_model(states, actions)
+agent = build_agent(model, actions, num_steps)
+agent, hist = train_agent(agent, env, num_steps)
+
+# save model
+try:
+    max_xp_ep = int(max(hist.history['episode_reward']))
+    print('History', hist.history)
+    if max_xp_ep > 0:
+        max_xp_ep = 'plus' + str(max_xp_ep)
+    else:
+        max_xp_ep = 'minus' + str(abs(max_xp_ep))
+except Exception:
+    max_xp_ep = 'none'
+model_path = f'rl/models/{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{max_xp_ep}.h5'
+model.save(model_path)
+#model.save_weights(f'rl/models/{name}_weights.h5', overwrite=True)
+
+
+# test model
+#scores = model.test(env, nb_episodes=2, visualize=False)
+#print(np.mean(scores.history['episode_reward']))
 
 
 
 
-# Implemented:
-# 'basic_attack' (move & attack closest red minion)
-# 'q_attack' (move & attack with spell 'Q')
-# 'use_well'
-# 'hide_in_bushes'
-# 'hide_behind_gate
-# 'escape_behind_gate' (with spell 'E')
-# 'use_spell_d' (recover health)
-# 'move' (up, right, down, left, up-right, down-right, left-down, up-left)
-# ----------------------------------------------------------------------------------------------------------
-from spectator_lib import Spectator
 
-spec = Spectator()
-spec.run()
+
+"""
+model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
+              loss=tf.keras.losses.MeanSquaredError(),
+              metrics=[tf.metrics.MeanAbsoluteError()])
+model.fit(train_images, train_labels, epochs=epochs)
+"""
+#pygame.quit()
+#model.save('model.h5')
+# model = keras.models.load_model('complete_saved_model/')
+#filename = f'logs\\{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{xp_gain}.txt'
+
+
+
+
+
+
+
 
 
 # GET H,S,V VALUES OF IMAGE
 """
+import cv2 as cv
+import numpy as np
 max_value = 255
 max_value_H = 360 // 2
 low_H = 0

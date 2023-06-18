@@ -41,6 +41,17 @@ template_H10_num_7 = cv.imread(f'imgs\\templates\\numbers\\H10_num_7.png', cv.IM
 template_H10_num_8 = cv.imread(f'imgs\\templates\\numbers\\H10_num_8.png', cv.IMREAD_GRAYSCALE)
 template_H10_num_9 = cv.imread(f'imgs\\templates\\numbers\\H10_num_9.png', cv.IMREAD_GRAYSCALE)
 
+template_H33_num_0 = cv.imread(f'imgs\\templates\\numbers\\H33_num_0.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_1 = cv.imread(f'imgs\\templates\\numbers\\H33_num_1.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_2 = cv.imread(f'imgs\\templates\\numbers\\H33_num_2.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_3 = cv.imread(f'imgs\\templates\\numbers\\H33_num_3.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_4 = cv.imread(f'imgs\\templates\\numbers\\H33_num_4.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_5 = cv.imread(f'imgs\\templates\\numbers\\H33_num_5.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_6 = cv.imread(f'imgs\\templates\\numbers\\H33_num_6.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_7 = cv.imread(f'imgs\\templates\\numbers\\H33_num_7.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_8 = cv.imread(f'imgs\\templates\\numbers\\H33_num_8.png', cv.IMREAD_GRAYSCALE)
+template_H33_num_9 = cv.imread(f'imgs\\templates\\numbers\\H33_num_9.png', cv.IMREAD_GRAYSCALE)
+
 template_death_icon = cv.imread(f'imgs\\templates\\death_icon.png', cv.IMREAD_GRAYSCALE)
 template_bot_icon = cv.imread(f'imgs\\templates\\bot_icon.png', cv.IMREAD_GRAYSCALE)
 template_well = cv.imread(f'imgs\\templates\\well.png', cv.IMREAD_GRAYSCALE)
