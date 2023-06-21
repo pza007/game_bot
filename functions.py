@@ -1,42 +1,141 @@
+from typing import List, Tuple, Union
 import pyautogui
 from global_vars import *
 import time
 import math
-
 from itertools import product, combinations
 
 
-def get_distance_between_points(point1, point2):
-    return float(np.linalg.norm(np.array((point1[0], point1[1])) - np.array((point2[0], point2[1]))))
+def get_distance_between_points(point1: Tuple[int, int],
+                                point2: Tuple[int, int]) -> tuple[float, None] | tuple[None, str]:
+    """
+    Calculate the distance between two points in a 2D space.
+
+    Args:
+        point1 (Tuple[int, int]): The coordinates of the first point.
+        point2 (Tuple[int, int]): The coordinates of the second point.
+
+    Returns:
+        tuple[float, None] | tuple[None, str]: The distance between the points if inputs are valid, otherwise None.
+
+    Raises:
+        None: This function does not raise any specific exceptions.
+    """
+    for point in [point1, point2]:
+        if not isinstance(point, tuple) or len(point) != 2 or not all(isinstance(coord, int) for coord in point):
+            return None, f'{point} should be a tuple(int, int)'
+
+    return float(np.linalg.norm(np.array(point1) - np.array(point2))), None
 
 
-def get_centroid_point(list_of_points: list) -> tuple:
-    # link: https://stackoverflow.com/questions/23020659/fastest-way-to-calculate-the-centroid-of-a-set-of-coordinate-tuples-in-python-wi
-    arr = np.array(list_of_points)
-    length = arr.shape[0]
-    sum_x = np.sum(arr[:, 0])
-    sum_y = np.sum(arr[:, 1])
-    return int(sum_x / length), int(sum_y / length)
+def get_centroid_point(list_of_points: List[Tuple[int, int]]) -> tuple[tuple[int, int], None] | tuple[None, str]:
+    """
+    Calculate the centroid point of a list of 2D points.
+
+    Args:
+        list_of_points (List[Tuple[int, int]]): The list of points.
+
+    Returns:
+        tuple[tuple[int, int], None] | tuple[None, str]: The centroid point as a tuple of integers if inputs are valid,
+        otherwise returns None and an error description.
+
+    Raises:
+        None: This function does not raise any specific exceptions.
+    """
+    if not isinstance(list_of_points, list):
+        return None, "list_of_points should be a list"
+    if len(list_of_points) == 0:
+        return None, "list_of_points should not be empty"
+    for item in list_of_points:
+        if not isinstance(item, tuple) or len(item) != 2 or not all(isinstance(coord, int) for coord in item):
+            return None, f'{item} should not be tuple(int, int)'
+
+    try:
+        arr = np.array(list_of_points)
+        length = arr.shape[0]
+        sum_x = np.sum(arr[:, 0])
+        sum_y = np.sum(arr[:, 1])
+        return (int(sum_x / length), int(sum_y / length)), None
+    except (ValueError, TypeError, ZeroDivisionError) as e:
+        return None, str(e)
 
 
-def point_inside_polygon(x, y, poly):
-    n = len(poly)
-    inside = False
-    p1x, p1y = poly[0]
-    for i in range(n + 1):
-        p2x, p2y = poly[i % n]
-        if y > min(p1y, p2y):
-            if y <= max(p1y, p2y):
-                if x <= max(p1x, p2x):
-                    if p1y != p2y:
-                        xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
-                    if p1x == p2x or x <= xints:
-                        inside = not inside
-        p1x, p1y = p2x, p2y
-    return inside
+def point_inside_polygon(x: int, y: int, poly: List[int, Tuple[int, int], int, Tuple[int, int]]) \
+        -> tuple[bool, None] | tuple[None, str]:
+    """
+    Check if a point is inside a polygon.
+
+    Args:
+        x (int): The x-coordinate of the point.
+        y (int): The y-coordinate of the point.
+        poly (List[int, Tuple[int, int], int, Tuple[int, int]]): polygon
+
+    Returns:
+        tuple[bool, None] | tuple[None, str]: True if the point is inside the polygon, False otherwise,
+        or returns None and an error description if inputs are invalid.
+
+    Raises:
+        None: This function does not raise any specific exceptions.
+    """
+    if not isinstance(x, int):
+        return None, "x should be an integer"
+    if not isinstance(y, int):
+        return None, "y should be an integer"
+    if not isinstance(poly, list):
+        return None, "poly should be a list"
+    if len(poly) != 4:
+        return None, "poly should have 4 values"
+    if not isinstance(poly[0], int):
+        return None, "poly[0] should be an integer"
+    if not isinstance(poly[1], tuple):
+        return None, "poly[1] should be a tuple"
+    if not isinstance(poly[2], int):
+        return None, "poly[2] should be an integer"
+    if not isinstance(poly[3], tuple):
+        return None, "poly[3] should be a tuple"
+
+    try:
+        n = len(poly)
+        inside = False
+        p1x, p1y = poly[0]
+        for i in range(n + 1):
+            p2x, p2y = poly[i % n]
+            if y > min(p1y, p2y):
+                if y <= max(p1y, p2y):
+                    if x <= max(p1x, p2x):
+                        if p1y != p2y:
+                            xints = (y - p1y) * (p2x - p1x) / (p2y - p1y) + p1x
+                        if p1x == p2x or x <= xints:
+                            inside = not inside
+            p1x, p1y = p2x, p2y
+        return inside, None
+    except (TypeError, ZeroDivisionError) as e:
+        return None, str(e)
 
 
-def point_inside_ellipse(point, point_center, ellipse_type):
+def point_inside_ellipse(point: Tuple[int, int], point_center: Tuple[int, int], ellipse_type: str) \
+        -> tuple[bool, None] | tuple[None, str]:
+    """
+    Check if a point is inside an ellipse.
+
+    Args:
+        point (Tuple[int, int]): The coordinates of the point.
+        point_center (Tuple[int, int]): The coordinates of the ellipse center.
+        ellipse_type (str): The type of ellipse ('Q' or 'W').
+
+    Returns:
+        tuple[bool, None] | tuple[None, str]: True if the point is inside the ellipse, False otherwise,
+        or returns None and an error description if inputs are invalid.
+
+    Raises:
+        None: This function does not raise any specific exceptions.
+    """
+    for item in [point, point_center]:
+        if not isinstance(item, tuple) or len(item) != 2 or not all(isinstance(coord, int) for coord in item):
+            return None, f'{item} should be a tuple(int, int)'
+    if not isinstance(ellipse_type, str) or ellipse_type not in ['Q', 'W']:
+        return None, f'{ellipse_type} should be a str: Q or W'
+
     ELLIPSE_Q_WITH = 222
     ELLIPSE_Q_HEIGHT = 180
     ELLIPSE_W_WITH = 385
@@ -45,28 +144,45 @@ def point_inside_ellipse(point, point_center, ellipse_type):
     if ellipse_type == 'Q':
         a = ELLIPSE_Q_WITH // 2
         b = ELLIPSE_Q_HEIGHT // 2
-    else:  # 'W'
+    else:  # ellipse_type == 'W':
         a = ELLIPSE_W_WITH // 2
         b = ELLIPSE_W_HEIGHT // 2
+
     phi = math.atan2(a * point[1], b * point[0])
-    point_on_ellipse = (point_center[0] + a * math.cos(phi), point_center[1] + b * math.sin(phi))
-    dist_to_point = get_distance_between_points(point_center, point)
-    dist_to_point_on_ellipse = get_distance_between_points(point_center, point_on_ellipse)
-    if dist_to_point <= dist_to_point_on_ellipse:
-        return True
-    else:
-        return False
+    point_on_ellipse = (int(point_center[0] + a * math.cos(phi)), int(point_center[1] + b * math.sin(phi)))
+    dist_to_point, err_desc = get_distance_between_points(point_center, point)
+    if dist_to_point is None:
+        return None, err_desc
+    dist_to_point_on_ellipse, err_desc = get_distance_between_points(point_center, point_on_ellipse)
+    if dist_to_point_on_ellipse is None:
+        return None, err_desc
+    return dist_to_point <= dist_to_point_on_ellipse, None
 
 
-def get_minions_positions(in_img, in_hsv):
+def get_minions_positions(frame: np.ndarray, hsv_frame: np.ndarray) -> tuple[dict, None] | tuple[None, str]:
     """
-    out: [dict] {color: [(x_center, y_center), ...] }
+    Get positions of minions in frame
 
-window = WindowCapture('Heroes of the Storm')
-img = window.get_screenshot()
-hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
-print(get_minions_positions(img, hsv))
+    Args:
+        frame (np.ndarray)
+        hsv_frame (np.ndarray)
+
+    Returns:
+        tuple[dict, None] | tuple[None, str]: dictionary of positions if inputs are valid, otherwise returns
+        None and an error description.
+        {'blue': [(x_center, y_center), ...],
+         'red': [(x_center, y_center), ...]}
+
+    Example:
+        window = WindowCapture('Heroes of the Storm')
+        img = window.get_screenshot()
+        hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
+        print(get_minions_positions(img, hsv))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
+    if not isinstance(hsv_frame, np.ndarray):
+        return None, f'hsv_frame should be np.ndarray'
 
     def get_health_bars(in_color):
         HB_COLOR_THR_RED = [np.array([150, 170, 80]), np.array([190, 255, 230])]
@@ -83,7 +199,7 @@ print(get_minions_positions(img, hsv))
             else:  # 'blue'
                 thr = HB_COLOR_THR_BLUE
             # create mask, based on thresholds
-            return cv.inRange(in_hsv, thr[0], thr[1])
+            return cv.inRange(hsv_frame, thr[0], thr[1])
 
         def transform_mask(in_mask):
             kernel = np.ones((3, 3), np.uint8)
@@ -124,7 +240,7 @@ print(get_minions_positions(img, hsv))
                     points = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
                     polygon = [box[0], (box[1][0], box[0][1]), box[1], (box[0][0], box[1][1])]
                     for point in points:
-                        if point_inside_polygon(point[0], point[1], polygon):
+                        if point_inside_polygon(point[0], point[1], polygon)[0]:
                             success = False
                             break
                     if not success:
@@ -154,21 +270,21 @@ print(get_minions_positions(img, hsv))
                     cnt_top, cnt_bottom = 0, 0
                     for x in range(b_x_min, b_x_max + 1):
                         # top border
-                        b, g, r, *a = in_img[b_y_min][x]  # B,G,R,A
+                        b, g, r, *a = frame[b_y_min][x]  # B,G,R,A
                         if b <= b_thr and g <= g_thr and r <= r_thr:
                             cnt_top += 1
                         # bottom border
-                        b, g, r, *a = in_img[b_y_max][x]
+                        b, g, r, *a = frame[b_y_max][x]
                         if b <= b_thr and g <= g_thr and r <= r_thr:
                             cnt_bottom += 1
                     cnt_left, cnt_right = 0, 0
                     for y in range(b_y_min, b_y_max + 1):
                         # left border
-                        b, g, r, *a = in_img[y][b_x_min]
+                        b, g, r, *a = frame[y][b_x_min]
                         if b <= b_thr and g <= g_thr and r <= r_thr:
                             cnt_left += 1
                         # right border
-                        b, g, r, *a = in_img[y][b_x_max]
+                        b, g, r, *a = frame[y][b_x_max]
                         if b <= b_thr and g <= g_thr and r <= r_thr:
                             cnt_right += 1
 
@@ -185,13 +301,13 @@ print(get_minions_positions(img, hsv))
 
         if f_debug:
             import copy
-            cv.imwrite('imgs\\_output1.jpg', in_img)
+            cv.imwrite('imgs\\_output1.jpg', frame)
             mask = get_mask()
             cv.imwrite('imgs\\_output2.jpg', mask)
             mask = transform_mask(mask)
             cv.imwrite('imgs\\_output3.jpg', mask)
             contours, _ = get_contours(mask)
-            img = copy.deepcopy(in_img)
+            img = copy.deepcopy(frame)
             for contour in contours:
                 x_min = min([_contour[0][0] for _contour in contour])  # point X
                 x_max = max([_contour[0][0] for _contour in contour])  # point X
@@ -200,22 +316,22 @@ print(get_minions_positions(img, hsv))
                 cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output4.jpg', img)
             contours = filter_1(contours)
-            img = copy.deepcopy(in_img)
+            img = copy.deepcopy(frame)
             for (x_min, y_min, x_max, y_max) in contours:
                 cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output5.jpg', img)
             contours = filter_2(contours)
-            img = copy.deepcopy(in_img)
+            img = copy.deepcopy(frame)
             for (x_min, y_min, x_max, y_max) in contours:
                 cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output6.jpg', img)
             contours = filter_3(contours)
-            img = copy.deepcopy(in_img)
+            img = copy.deepcopy(frame)
             for (x_min, y_min, x_max, y_max) in contours:
                 cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output7.jpg', img)
             contours = filter_4(contours)
-            img = copy.deepcopy(in_img)
+            img = copy.deepcopy(frame)
             for (x_min, y_min, x_max, y_max) in contours:
                 cv.rectangle(img, (x_min, y_min), (x_max, y_max), (0, 255, 0), 1)
             cv.imwrite('imgs\\_output8.jpg', img)
@@ -261,7 +377,7 @@ print(get_minions_positions(img, hsv))
 
         if f_debug:
             import copy
-            img = copy.deepcopy(in_img)
+            img = copy.deepcopy(frame)
             for color, list_of_points in out.items():
                 for (x, y) in list_of_points:
                     if color == 'red':
@@ -277,28 +393,42 @@ print(get_minions_positions(img, hsv))
         out[color] = get_health_bars(color)
     out = get_points(out)  # {color: [(x_center, y_center), ...] }
 
-    return out
+    return out, None
 
 
-def get_bot_positions(in_hsv):
+def get_bot_positions(hsv_frame: np.ndarray) -> tuple[dict, None] | tuple[None, str]:
     """
-    out: [dict] or None, description [str]
+    Get positions of bot in hsv frame
 
-file_path = f'imgs\\detect\\gate.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-out, desc = get_bot_positions(hsv)
-(x_min, y_min, x_max, y_max), (x_center, y_center) = out['health_bar']
-cv.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 0, 255), 1)
-cv.rectangle(frame, (x_center-1, y_center-1), (x_center+1, y_center+1), (0, 0, 255), 1)
-(x_min, y_min, x_max, y_max), (x_center, y_center) = out['bounding_box']
-cv.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 0, 255), 1)
-cv.rectangle(frame, (x_center-1, y_center-1), (x_center+1, y_center+1), (0, 0, 255), 1)
-(x_min, y_min, x_max, y_max), (x_center, y_center) = out['circle']
-cv.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 0, 255), 1)
-cv.rectangle(frame, (x_center-1, y_center-1), (x_center+1, y_center+1), (0, 0, 255), 1)
-cv.imwrite('imgs\\_result.jpg', frame)
+    Args:
+        hsv_frame (np.ndarray)
+
+    Returns:
+        tuple[dict, None] | tuple[None, str]: dictionary of positions if inputs are valid, otherwise returns
+        None and an error description.
+        {'health_bar':  ((x_min, y_min, x_max, y_max), (x_center,y_center)),
+        'bounding_box': ((x_min, y_min, x_max, y_max), (x_center,y_center)),
+        'circle':      ((x_min, y_min, x_max, y_max), (x_center,y_center))}
+
+    Example:
+        file_path = f'imgs\\detect\\gate.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+        out, desc = get_bot_positions(hsv)
+        (x_min, y_min, x_max, y_max), (x_center, y_center) = out['health_bar']
+        cv.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 0, 255), 1)
+        cv.rectangle(frame, (x_center-1, y_center-1), (x_center+1, y_center+1), (0, 0, 255), 1)
+        (x_min, y_min, x_max, y_max), (x_center, y_center) = out['bounding_box']
+        cv.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 0, 255), 1)
+        cv.rectangle(frame, (x_center-1, y_center-1), (x_center+1, y_center+1), (0, 0, 255), 1)
+        (x_min, y_min, x_max, y_max), (x_center, y_center) = out['circle']
+        cv.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 0, 255), 1)
+        cv.rectangle(frame, (x_center-1, y_center-1), (x_center+1, y_center+1), (0, 0, 255), 1)
+        cv.imwrite('imgs\\_result.jpg', frame)
     """
+    if not isinstance(hsv_frame, np.ndarray):
+        return None, f'hsv_frame should be np.ndarray'
+
     out = {
         'health_bar': ((None, None, None, None), (None, None)),  # ((x_min, y_min, x_max, y_max), (x_center,y_center))
         'bounding_box': ((None, None, None, None), (None, None)),  # ((x_min, y_min, x_max, y_max), (x_center,y_center))
@@ -323,8 +453,8 @@ cv.imwrite('imgs\\_result.jpg', frame)
         """ find bot's health bar, depending on it's position """
 
         def execute():
-            hsv = in_hsv[shift_y_min:shift_y_max, shift_x_min:shift_x_max]
-            mask = cv.inRange(hsv, _HEALTH_BAR_COLOR_THR[0], _HEALTH_BAR_COLOR_THR[1])
+            hsv_small = hsv_frame[shift_y_min:shift_y_max, shift_x_min:shift_x_max]
+            mask = cv.inRange(hsv_small, _HEALTH_BAR_COLOR_THR[0], _HEALTH_BAR_COLOR_THR[1])
             contours = get_contours(mask)
             if len(contours) > 0:
                 contours = filter_by_dimensions(contours)
@@ -432,23 +562,33 @@ cv.imwrite('imgs\\_result.jpg', frame)
     get_bounding_box()
     get_circle()
 
-    return out, ''
+    return out, None
 
 
-def get_bot_health_value(in_frame):
+def get_bot_health_value(frame: np.ndarray) -> tuple[tuple[int, int], None] | tuple[None, str]:
     """
-    out: (val_current, val_max) or (None, None)
+    Get value of bot's mana in the frame
 
-from functions import get_bot_health_value
-file_path = f'imgs\\detect\\health\\'
-for cnt in range(1, 7):
-    frame = cv.imread(f'{file_path}health_{cnt}.png', cv.IMREAD_UNCHANGED)
-    print(f'health_{cnt}.png', get_bot_health_value(frame))
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[tuple[int, int], None] | tuple[None, str]: current value of mana, max value of mana if inputs are valid,
+        otherwise returns None and an error description.
+
+    Example:
+        from functions import get_bot_health_value
+        file_path = f'imgs\\detect\\health\\'
+        for cnt in range(1, 7):
+            frame = cv.imread(f'{file_path}health_{cnt}.png', cv.IMREAD_UNCHANGED)
+            print(f'health_{cnt}.png', get_bot_health_value(frame))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
 
     # get part of image
     x_min, y_min, x_max, y_max = 206, 992, 420, 1010
-    img = in_frame[y_min:y_max, x_min:x_max]
+    img = frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get position of slash character
@@ -456,7 +596,7 @@ for cnt in range(1, 7):
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= res.max())
     if len(loc[0]) == 0:
-        return None, None  # could not find slash position
+        return None, f'Did not find slash-character position'
     x_slash, y_slash = loc[::-1][0][0], loc[::-1][1][0]
 
     # get positions of numbers
@@ -477,29 +617,37 @@ for cnt in range(1, 7):
     val_current_str = ''.join([str(num) for (x, y, num) in out if x < x_slash])  # numbers before slash
     val_max_str = ''.join([str(num) for (x, y, num) in out if x > x_slash])  # numbers after slash
     if not val_current_str.isdigit() or not val_max_str.isdigit():
-        return None, None  # could not detect numbers
-    val_current = int(val_current_str)
-    val_max = int(val_max_str)
-    if val_current > val_max:
-        return None, None  # error when detecting numbers
+        return None, f'Did not detect numbers (H08)'
+    if int(val_current_str) > int(val_max_str):
+        return None, f'Current value={val_current_str} greater than max value={val_max_str}'
 
-    return val_current, val_max
+    return (int(val_current_str), int(val_max_str)), None
 
 
-def get_bot_mana_value(in_frame):
+def get_bot_mana_value(frame: np.ndarray) -> tuple[tuple[int, int], None] | tuple[None, str]:
     """
-    out: (val_current, val_max) or (None, None)
+    Get value of bot's mana in the frame
 
-from functions import get_bot_mana_value
-file_path = f'imgs\\detect\\mana\\'
-for cnt in range(1, 5):
-    frame = cv.imread(f'{file_path}mana_{cnt}.png', cv.IMREAD_UNCHANGED)
-    print(f'mana_{cnt}.png', get_bot_mana_value(frame))
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[tuple[int, int], None] | tuple[None, str]: current value of mana, max value of mana if inputs are valid,
+        otherwise returns None and an error description.
+
+    Example:
+        from functions import get_bot_mana_value
+        file_path = f'imgs\\detect\\mana\\'
+        for cnt in range(1, 5):
+            frame = cv.imread(f'{file_path}mana_{cnt}.png', cv.IMREAD_UNCHANGED)
+            print(f'mana_{cnt}.png', get_bot_mana_value(frame))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
 
     # get part of image
     x_min, y_min, x_max, y_max = 198, 1013, 403, 1030
-    img = in_frame[y_min:y_max, x_min:x_max]
+    img = frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get position of slash character
@@ -507,7 +655,7 @@ for cnt in range(1, 5):
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= res.max())
     if len(loc[0]) == 0:
-        return None, None  # could not find slash position
+        return None, f'Did not find slash-character position'
     x_slash, y_slash = loc[::-1][0][0], loc[::-1][1][0]
 
     # get positions of numbers
@@ -528,70 +676,90 @@ for cnt in range(1, 5):
     val_current_str = ''.join([str(num) for (x, y, num) in out if x < x_slash])  # numbers before slash
     val_max_str = ''.join([str(num) for (x, y, num) in out if x > x_slash])  # numbers after slash
     if not val_current_str.isdigit() or not val_max_str.isdigit():
-        return None, None  # could not detect numbers
-    val_current = int(val_current_str)
-    val_max = int(val_max_str)
-    if val_current > val_max:
-        return None, None  # error when detecting numbers
+        return None, f'Did not detect numbers (H08)'
+    if int(val_current_str) > int(val_max_str):
+        return None, f'Current value={val_current_str} greater than max value={val_max_str}'
 
-    return val_current, val_max
+    return (int(val_current_str), int(val_max_str)), None
 
 
-def get_cooldowns(in_frame):
+def get_cooldowns(frame: np.ndarray) -> tuple[dict, None] | tuple[None, str]:
     """
-    out: {skill_key: is_on_cooldown}    e.g: {'Q': False}
+    Get cooldowns in the frame
 
-file_path = f'imgs\\detect\\cooldowns.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(get_cooldowns(frame))
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[dict, None] | tuple[None, str]: dictionary of cooldown names and bolean values if cooldown is True or False if inputs are valid, otherwise returns
+        None and an error description.
+        {'Q': False, 'W': False, 'E': False, 'R': False, 'D': False, 'well': False}
+
+    Example:
+        file_path = f'imgs\\detect\\cooldowns.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(get_cooldowns(frame))
     """
-
-    def get_well_cooldown():
-        # get part of image
-        x_mini, y_mini, x_maxi, y_maxi = 182, 1038, 182 + 34, 1038 + 17
-        img = in_frame[y_mini:y_maxi, x_mini:x_maxi]
-        img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-        # template
-        thr = 0.8
-        template = template_plus_symbol
-        res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
-        loc = np.where(res >= thr)
-        # result
-        if len(loc[0]) > 0:
-            return False  # found plus sign = no cooldown
-        else:
-            return True
-
-    threshold = 60  # min number of pixels == cooldown number is present
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
 
     out = {'Q': False, 'W': False, 'E': False, 'R': False, 'D': False, 'well': False}
+
+    # Q, W, E, R, D
+    threshold = 60  # min number of pixels == cooldown number is present
     for i, key in enumerate(out.keys()):
         x_min, y_min, x_max, y_max = 762 + 85 * i, 1019, 762 + 85 * i + 57, 1019 + 24
-        hsv = cv.cvtColor(in_frame[y_min:y_max, x_min:x_max], cv.COLOR_BGR2HSV)
+        hsv = cv.cvtColor(frame[y_min:y_max, x_min:x_max], cv.COLOR_BGR2HSV)
         mask = cv.inRange(hsv, (0, 0, 200), (1, 1, 255))
         num_pixels = len(np.where(mask >= 200)[0])
         if num_pixels >= threshold:
-            out[key] = True  # is on cooldown
+            out[key] = True  # found number -> is on cooldown
 
-    out['well'] = get_well_cooldown()
+    # well
+    #   get part of image
+    x_mini, y_mini, x_maxi, y_maxi = 182, 1038, 182 + 34, 1038 + 17
+    img = frame[y_mini:y_maxi, x_mini:x_maxi]
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+    #   template
+    thr = 0.8
+    template = template_plus_symbol
+    res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
+    loc = np.where(res >= thr)
+    #   result
+    if len(loc[0]) == 0:
+        out['well'] = True  # did not find plus sign -> is on cooldown
 
-    return out
+    return out, None
 
 
-def get_xp_from_level(in_frame, **kwargs) -> int:
+def get_xp_from_level(frame: np.ndarray, **kwargs) -> tuple[int, None] | tuple[None, str]:
     """
-    in: kwargs.get('xp_prev')
-    out: xp
-    @Note: if 'xp_prev' is available then returns greater value
+    Get value of XP in the frame. XP value is calculated based on XP bar and XP number
 
-import cv2 as cv
-from functions import get_xp_from_level
-file_path = f'imgs\\detect\\xp\\780.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(get_xp_from_level(frame, xp_prev=0))
+    Args:
+        frame (np.ndarray)
+        kwargs: 'xp_prev' = previous value of XP
+
+    Returns:
+        tuple[int, None] | tuple[None, str]: XP value if inputs are valid, otherwise returns
+        None and an error description. If 'xp_prev' is available then returns greater value
+
+    Example:
+        import cv2 as cv
+        from functions import get_xp_from_level
+        file_path = f'imgs\\detect\\xp\\780.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(get_xp_from_level(frame, xp_prev=0))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
 
-    def calculate_xp_value(in_level, in_progress):
+    def calculate_xp_value(in_level: int, in_progress: float) -> int:
+        """
+        in: in_level - number of level [0,1,2,...30]
+        in: progress - current progress, based on XP bar [0.0; 1.0]
+        out: xp_value [int]
+        """
         if in_level == 1:
             curr_sum, next_sum = 0, 2010
         elif in_level == 2:
@@ -650,14 +818,15 @@ print(get_xp_from_level(frame, xp_prev=0))
             curr_sum, next_sum = 188801, 25000
         elif in_level == 29:
             curr_sum, next_sum = 213801, 28000
-        else:   # in_level == 30
+        else:  # in_level == 30
             curr_sum, next_sum = 241801, 0
 
-        return int('%d' % (curr_sum + in_progress*next_sum))   # get values before comma
+        return int('%d' % (curr_sum + in_progress * next_sum))  # get values before comma
+
     # LEVEL detection  -----------------------------------
     # get part of image
     x_min, y_min, x_max, y_max = 865, 25, 920, 64
-    img = in_frame[y_min:y_max, x_min:x_max]
+    img = frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
     # get positions of numbers
     out = []  # (x,y,number)
@@ -671,7 +840,7 @@ print(get_xp_from_level(frame, xp_prev=0))
         for pt in zip(*loc[::-1]):
             out.append((pt[0], pt[1], idx))
     if len(out) == 0:
-        raise Exception('No numbers (H33) detected')
+        return None, f'No numbers (H33) detected'
     # sort numbers (by x position)
     out.sort(key=lambda x: x[0])
     # filter only unique matches (if the same number is detected too close, means it is the same number)
@@ -680,44 +849,50 @@ print(get_xp_from_level(frame, xp_prev=0))
     for x, y, num in out:
         if prev_num is None:
             prev_x, prev_y, prev_num = x, y, num
-            out_filtered.append((x, y, num))    # first number
+            out_filtered.append((x, y, num))  # first number
         else:
             if num != prev_num:
-                out_filtered.append((x, y, num))    # different number
-            else:   # same number
-                if abs(x-prev_x) >= 10:   # x-shifted in image ==> different number
+                out_filtered.append((x, y, num))  # different number
+            else:  # same number
+                if abs(x - prev_x) >= 10:  # x-shifted in image ==> different number
                     out_filtered.append((x, y, num))
             prev_x, prev_y, prev_num = x, y, num
     if len(out_filtered) > 2:
-        raise Exception('More than 2 numbers (H33) detected')
+        return None, f'More than 2 numbers (H33) detected'
     # final value
     level = int(''.join([str(num) for (x, y, num) in out_filtered]))
 
     # BAR detection -----------------------------------
     # get part of image
-    x_min, y_min, x_max, y_max = 838, 5, 838+81, 5+12
-    img = in_frame[y_min:y_max, x_min:x_max]
+    x_min, y_min, x_max, y_max = 838, 5, 838 + 81, 5 + 12
+    img = frame[y_min:y_max, x_min:x_max]
     hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
     color_thr = [np.array([90, 80, 90]), np.array([180, 255, 255])]
     mask = cv.inRange(hsv, color_thr[0], color_thr[1])
     # get rid of 'edges' pixels (h,w)
-    blank_pixels_left = [(2,0), (3,0), (4,0),(4,0), (5,0),(5,1),(5,2), (6,0),(6,1),(6,2), (7,0),(7,1),(7,2),(7,3), (8,0),(8,1),(8,2),(8,3), (9,0),(9,1),(9,2),(9,3),(9,4), (10,0),(10,1),(10,2),(10,3),(10,4), (11,0),(11,1),(11,2),(11,3),(11,4),(11,5)]
-    blank_pixels_right = [(0,75),(0,76),(0,77),(0,78),(0,79),(0,80), (1,76),(1,77),(1,78),(1,79),(1,80), (2,76),(2,77),(2,78),(2,79),(2,80), (3,77),(3,78),(3,79),(3,80), (4,77),(4,78),(4,79),(4,80), (5,78),(5,79),(5,80), (6,78),(6,79),(6,80), (7,79),(7,80), (8,79),(8,80), (9,80)]
+    blank_pixels_left = [(2, 0), (3, 0), (4, 0), (4, 0), (5, 0), (5, 1), (5, 2), (6, 0), (6, 1), (6, 2), (7, 0), (7, 1),
+                         (7, 2), (7, 3), (8, 0), (8, 1), (8, 2), (8, 3), (9, 0), (9, 1), (9, 2), (9, 3), (9, 4),
+                         (10, 0), (10, 1), (10, 2), (10, 3), (10, 4), (11, 0), (11, 1), (11, 2), (11, 3), (11, 4),
+                         (11, 5)]
+    blank_pixels_right = [(0, 75), (0, 76), (0, 77), (0, 78), (0, 79), (0, 80), (1, 76), (1, 77), (1, 78), (1, 79),
+                          (1, 80), (2, 76), (2, 77), (2, 78), (2, 79), (2, 80), (3, 77), (3, 78), (3, 79), (3, 80),
+                          (4, 77), (4, 78), (4, 79), (4, 80), (5, 78), (5, 79), (5, 80), (6, 78), (6, 79), (6, 80),
+                          (7, 79), (7, 80), (8, 79), (8, 80), (9, 80)]
     for h, w in blank_pixels_left: mask[h, w] = 0
     for h, w in blank_pixels_right: mask[h, w] = 0
     # find the lowest, most right pixel in the mask
     idx = None
-    for h in range(mask.shape[0]-1, 0, -1):
-        for w in range(mask.shape[1]-1, 0, -1):
+    for h in range(mask.shape[0] - 1, 0, -1):
+        for w in range(mask.shape[1] - 1, 0, -1):
             if mask[h][w] > 100:
                 # check if there is SOLID line of pixels reaching the left blank edge
                 left_w = None
-                tmp = [pixel_w for pixel_h, pixel_w in blank_pixels_left if pixel_h == h]    # pixels with the same height
+                tmp = [pixel_w for pixel_h, pixel_w in blank_pixels_left if pixel_h == h]  # pixels with the same height
                 if len(tmp) > 0:
-                    left_w = max(tmp)   # pixel closest to center
+                    left_w = max(tmp)  # pixel closest to center
                 else:
                     left_w = -1
-                if all(val > 100 for val in mask[h][left_w+1: w+1]):
+                if all(val > 100 for val in mask[h][left_w + 1: w + 1]):
                     idx = w
             if idx:
                 break
@@ -725,34 +900,45 @@ print(get_xp_from_level(frame, xp_prev=0))
             break
     # compensate idx value
     if idx is None:
-        idx = 0     # did not find the bar's pixel color -> just started number
+        idx = 0  # did not find the bar's pixel color -> just started number
     if idx + 1 <= mask.shape[1]:
         idx += 1
     # final value
     progress = idx / mask.shape[1]
 
-    # xp value
+    # XP value -----------------------------------
     xp = calculate_xp_value(level, progress)
     xp_prev = kwargs.get('xp_prev')
     if xp_prev is None:
-        return xp
+        return xp, None
     else:
-        return max(xp, xp_prev)
+        return max(xp, xp_prev), None
 
 
-def get_total_xp_value(in_frame):
+# OBSOLETE function
+def get_total_xp_value(frame: np.ndarray) -> tuple[int, None] | tuple[None, str]:
     """
-    out: xp_value
-    # Note: to read value, need to move mouse to position (x=960, y=44) and wait 1.5 sec
+    Get total value of XP in the frame
+    @Note: to read value, need to move mouse to position (x=960, y=44) and wait 1.5 sec
 
-file_path = f'imgs\\detect\\xp_total.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(get_total_xp_value(frame))
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[int, None] | tuple[None, str]: total value of XP if inputs are valid, otherwise returns
+        None and an error description.
+
+    Example:
+        file_path = f'imgs\\detect\\xp_total.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(get_total_xp_value(frame))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
 
     # get part of image
     x_min, y_min, x_max, y_max = 875, 243, 875 + 70, 243 + 18
-    img = in_frame[y_min:y_max, x_min:x_max]
+    img = frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get positions of numbers
@@ -768,25 +954,36 @@ print(get_total_xp_value(frame))
             out.append((pt[0], pt[1], idx))
 
     if len(out) == 0:
-        return 0    # no numbers found
+        return None, f'No XP numbers found'
 
     #   sort numbers (by x position)
     out.sort(key=lambda x: x[0])
     # create final value
-    return int(''.join([str(num) for (x, y, num) in out]))
+    return int(''.join([str(num) for (x, y, num) in out])), None
 
 
-def is_bot_hidden(in_frame):
+def is_bot_hidden(frame: np.ndarray) -> tuple[bool, None] | tuple[None, str]:
     """
-    out: True or False
+    Checks if bot is hidden in the frame
 
-file_path = f'imgs\\detect\\hidden.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(is_bot_hidden(frame))
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[bool, None] | tuple[None, str]: True if bot is hidden or False if is not hidden, if inputs are invalid returns
+        None and an error description.
+
+    Example:
+        file_path = f'imgs\\detect\\hidden.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(is_bot_hidden(frame))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
+
     # get part of image
     x_min, y_min, x_max, y_max = 930, 250, 930 + 60, 250 + 90
-    img = in_frame[y_min:y_max, x_min:x_max]
+    img = frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get positions of template
@@ -796,23 +993,31 @@ print(is_bot_hidden(frame))
     loc = np.where(res >= threshold)
 
     # final output
-    if len(loc[0]) == 0:
-        return False
-    else:
-        return True
+    return len(loc[0]) > 0, None
 
 
-def is_bot_dead(in_frame):
+def is_bot_dead(frame: np.ndarray) -> tuple[bool, None] | tuple[None, str]:
     """
-    out: True or False
+    Check if bot is dead in the frame
 
-file_path = f'imgs\\detect\\death.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(is_bot_dead(frame))
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[bool, None] | tuple[None, str]: True if bot is dead or False if is not dead, if inputs are invalid returns
+        None and an error description.
+
+    Example:
+        file_path = f'imgs\\detect\\death.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(is_bot_dead(frame))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
+
     # get part of image
     x_min, y_min, x_max, y_max = 945, 696, 945 + 30, 696 + 30
-    img = in_frame[y_min:y_max, x_min:x_max]
+    img = frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get positions of template
@@ -822,23 +1027,31 @@ print(is_bot_dead(frame))
     loc = np.where(res >= threshold)
 
     # final output
-    if len(loc[0]) == 0:
-        return False
-    else:
-        return True
+    return len(loc[0]) > 0, None
 
 
-def get_bot_icon_position(in_frame):
+def get_bot_icon_position(frame: np.ndarray) -> tuple[tuple[int, int], None] | tuple[None, str]:
     """
-    out: (x, y) or (None, None)
+    Get the position of the bot icon in the frame.
 
-file_path = f'imgs\\detect\\gate.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(get_bot_icon_position(frame))
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[tuple[int, int], None] | tuple[None, str]: The coordinates (x, y) of the bot icon position if inputs are valid,
+        otherwise returns None and an error description.
+
+    Example:
+        file_path = f'imgs\\detect\\gate.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(get_bot_icon_position(frame))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
+
     # get part of image
     x_min, y_min, x_max, y_max = 1558, 863, 1558 + 366, 863 + 183
-    img = in_frame[y_min:y_max, x_min:x_max]
+    img = frame[y_min:y_max, x_min:x_max]
     img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
 
     # get positions of template
@@ -848,59 +1061,73 @@ print(get_bot_icon_position(frame))
     res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
     loc = np.where(res >= threshold)
     if len(loc[0]) == 0:
-        return None, None  # could not find icon's position
+        return None, f"could not find bot's icon position"
     else:
         x_out, y_out = x_min + loc[::-1][0][0] + x_shift, y_min + loc[::-1][1][0] + y_shit
-        return int(x_out), int(y_out)
+        return (int(x_out), int(y_out)), None
 
 
-def is_bot_icon_in_place(position: tuple, in_place: str) -> bool:
+def is_bot_icon_in_place(position: tuple[int, int], place: str) -> tuple[bool, None] | tuple[None, str]:
     """
-    out: True or False
+    Check if the bot icon is in the specified position.
+
+    Args:
+        position (tuple[int, int]): The position coordinates (x, y).
+        place (str): The place to check. Possible values: 'gate', 'bush', 'middle'.
+
+    Returns:
+        tuple[bool, None] | tuple[None, str]: True if the bot icon is in the specified place, False otherwi. If
+        inputs are invalid returns None and an error description.
+
+    Raises:
+        None: This function does not raise any specific exceptions.
     """
+    if not isinstance(position, tuple) or len(position) != 2 or not all(isinstance(item, int) for item in position):
+        return None, f'position={position} should be tuple[int, int]'
+    if not isinstance(place, str) or place not in ['gate', 'bush', 'middle']:
+        return None, f'place={place} should be str'
+
     x, y = position
-    if type(x) is not int or type(y) is not int:
-        # TODO: raise Exception(f'Invalid input type: x={x}, y={y}')
-        return False
 
-    if in_place == 'gate':
+    if place == 'gate':
         x_min, y_min, x_max, y_max = 1651, 899, 1651 + 6, 899 + 17
-        if x_min <= x <= x_max and y_min <= y <= y_max:
-            return True
-        else:
-            return False
+        return x_min <= x <= x_max and y_min <= y <= y_max, None
 
-    elif in_place == 'bush':
+    elif place == 'bush':
         x_min, y_min, x_max, y_max = 1712, 880, 1712 + 23, 880 + 4
-        if x_min <= x <= x_max and y_min <= y <= y_max:
-            return True
-        else:
-            return False
+        return x_min <= x <= x_max and y_min <= y <= y_max, None
 
-    elif in_place == 'middle':
-        x_min, y_min, x_max, y_max = 1723-5, 896-5, 1723+5, 896+5
-        if x_min <= x <= x_max and y_min <= y <= y_max:
-            return True
-        else:
-            return False
-
-    else:
-        # TODO: raise Exception(f'Invalid input: in_place={in_place}')
-        return False
+    else:  # place == 'middle':
+        x_min, y_min, x_max, y_max = 1723 - 5, 896 - 5, 1723 + 5, 896 + 5
+        return x_min <= x <= x_max and y_min <= y <= y_max, None
 
 
-def get_well_position(in_frame):
+def get_well_position(frame: np.ndarray) -> tuple[tuple[int, int], None] | tuple[None, str]:
     """
-    out: (x, y) or (None, None)
-    # Note: to get value, bot need to be at place: 'gate'
+    Get the well's position from frame.
+    !Note! to get position, bot need to be at place: 'gate'
 
-file_path = f'imgs\\detect\\gate.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(get_well_position(frame))
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[tuple[int, int], None] | tuple[None, str]: The well's position (x, y) if inputs are valid,
+        otherwise returns None and an error description.
+
+    Raises:
+        None: This function does not raise any specific exceptions.
+
+    Example:
+        file_path = f'imgs\\detect\\gate.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(get_well_position(frame))
     """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
+
     # get part of image
     x_min, y_min, x_max, y_max = 550, 250, 550 + 350, 250 + 300
-    img = in_frame[y_min:y_max, x_min:x_max]
+    img = frame[y_min:y_max, x_min:x_max]
     hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
 
     # get mask from color
@@ -915,9 +1142,9 @@ print(get_well_position(frame))
     if circles is not None and circles.shape == (1, 1, 3):
         circle_x, circle_y, circle_r = int(circles[0][0][0]), int(circles[0][0][1]), int(circles[0][0][2])
         out_x, out_y = x_min + circle_x, y_min + circle_y
-        return int(out_x), int(out_y)
+        return (int(out_x), int(out_y)), None
     else:
-        return None, None  # could not find circle
+        return None, "Could not find well's circle"
 
     # old code - calculate fill level
     """
@@ -962,30 +1189,45 @@ print(get_well_position(frame))
     """
 
 
-def get_center_point_for_spell(minions: dict, bot_pos: dict, spell_type: str, **kwargs) -> tuple:
+def get_center_point_for_spell(minions: dict, bot_pos: tuple[int, int], spell_type: str, **kwargs) -> \
+        tuple[tuple[int, int], None] | tuple[None, str]:
     """
-    out: (x, y)
-
+    Get the center point for a spell based on minions positions and bot position.
     - get points that are close to each other
     - calculate all centroids for 2,3,4,5... points
-    - choose center point of centroid that ellipse includes the most of points
+    - choose center point of centroid that ellipse includes the most points
 
-file_path = f'imgs\\attack\\attack_q.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
-minions = get_minions_positions(frame, frame_hsv)
-bot, desc = get_bot_positions(frame_hsv)
-print(get_center_point_for_spell(minions, bot, 'Q', frame=frame))
+    Args:
+        minions (dict): Dictionary containing minion positions.
+        bot_pos (tuple[int, int]):  bot position (x,y).
+        spell_type (str): Type of the spell.
+        **kwargs: 'frame'
+
+    Returns:
+        tuple[tuple[int, int], None] | tuple[None, str]: The center point (x, y) if inputs are valid,
+        otherwise returns None and an error description.
+
+    Raises:
+        None: This function does not raise any specific exceptions.
+
+    Example:
+        file_path = f'imgs\\attack\\attack_q.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+        minions = get_minions_positions(frame, frame_hsv)
+        bot, desc = get_bot_positions(frame_hsv)
+        print(get_center_point_for_spell(minions, bot, 'Q', frame=frame))
     """
+
     def get_points(in_points):
         """ get the group of points with most points that are close to each other (max_dist == ellipse width//2) """
         if spell_type == 'Q':
             ELLIPSE_WITH = 222
-        else:   # spell_type == 'W'
+        else:  # spell_type == 'W'
             ELLIPSE_WITH = 385
 
         tups = [sorted(sub) for sub in product(in_points, repeat=2) if
-                get_distance_between_points(*sub) <= ELLIPSE_WITH // 2]
+                get_distance_between_points(*sub)[0] <= ELLIPSE_WITH // 2]
 
         res_dict = {point: {point} for point in in_points}
         out_points = []
@@ -998,29 +1240,54 @@ print(get_center_point_for_spell(minions, bot, 'Q', frame=frame))
 
         return list(out_points)
 
-    f_debug = False
+    try:
+        int(minions['red'][0][0])  # x
+    except Exception as e:
+        return None, f'minions["red"]={minions["red"]} shall be List[Tuple[int, int]]'
+    if not isinstance(bot_pos, tuple) or len(bot_pos) != 2 or not all(isinstance(item, int) for item in bot_pos):
+        return None, f'bot_pos={bot_pos} shall be Tuple[int, int]'
+    if not isinstance(spell_type, str) or spell_type not in ['Q', 'W']:
+        return None, f'{spell_type} should be a str: Q or W'
 
     # get points
     points = get_points(minions['red'])
     #   1 point -> return point that is closest to bot
     if len(points) == 1:
-        return min((get_distance_between_points(bot_pos, pos), pos) for pos in minions['red'])[1]
+        distances = []
+        for minion_pos in minions['red']:
+            dist, err_desc = get_distance_between_points(bot_pos, minion_pos)
+            if dist is None:
+                return None, err_desc
+            distances.append((dist, minion_pos))
+        if len(distances) == 0:
+            return None, 'No distances to minions'
+        distances.sort()
+        return distances[0][1], None  # pos
     #   2 points -> return point between them
     if len(points) == 2:
         (x1, y1), (x2, y2) = points
-        return int(x1 + (x1 - x2)), int(y1 + (y1 - y2))
+        return (int(x1 + (x1 - x2)), int(y1 + (y1 - y2))), None
 
     # get centroids
-    centroids = set()
+    centroids = set()  # set( tuple(int, int) )
     for num_tuples in range(2, len(points) + 1):
         for obj in combinations(points, num_tuples):
-            centroids.add(get_centroid_point(list(obj)))
+            pos, err_desc = get_centroid_point(list(obj))
+            if pos is None:
+                return None, err_desc
+            centroids.add(pos)
 
     # get how many points are inside ellipse which center is defined by centroid
     centroids_ellipse = []
     max_val = -1
     for pos_centroid in centroids:
-        val = sum(1 for pos_point in points if point_inside_ellipse(pos_point, pos_centroid, spell_type))
+        val = 0
+        for pos_point in points:
+            inside, err_desc = point_inside_ellipse(pos_point, pos_centroid, spell_type)
+            if inside is None:
+                return None, err_desc
+            if inside:
+                val += 1
         if val > max_val:
             centroids_ellipse.append((pos_centroid, val))
             max_val = val
@@ -1029,66 +1296,81 @@ print(get_center_point_for_spell(minions, bot, 'Q', frame=frame))
     centroids_ellipse.sort(key=lambda x: x[1])
     point_center = centroids_ellipse[-1][0]
 
-    if f_debug:
+    frame = kwargs.get('frame')  # FOR DEBUGGING
+    if frame is not None:
         print('number of points inside=', centroids_ellipse[-1][1])
-        frame = kwargs.get('frame')
         for (x, y) in points:
             cv.rectangle(frame, (x - 1, y - 1), (x + 1, y + 1), (0, 0, 255), 2)
-        cv.rectangle(frame, (point_center[0] - 1, point_center[1] - 1), (point_center[0] + 1, point_center[1] + 1), (255, 0, 0), 2)
+        cv.rectangle(frame, (point_center[0] - 1, point_center[1] - 1), (point_center[0] + 1, point_center[1] + 1),
+                     (255, 0, 0), 2)
         if spell_type == 'Q':
             ELLIPSE_WITH = 222
             ELLIPSE_HEIGHT = 180
-        else:   # spell_type == 'W'
+        else:  # spell_type == 'W'
             ELLIPSE_WITH = 385
             ELLIPSE_HEIGHT = 305
         cv.ellipse(frame, point_center, (ELLIPSE_WITH // 2, ELLIPSE_HEIGHT // 2), 0, 0, 360, (255, 0, 0), 1)
         cv.imwrite('imgs\\_output.jpg', frame)
 
-    return int(point_center[0]), int(point_center[1])
+    return (int(point_center[0]), int(point_center[1])), None
 
 
-def get_move_position(position, in_direction):
+def get_move_position(position: tuple[int, int], direction: str) -> tuple[tuple[int, int], None] | tuple[None, str]:
     """
-    out: (x, y) or (None, None)
+    Get the new position based on the given direction.
 
-file_path = f'imgs\\detect\\gate.png'
-frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
-print(get_move_position(frame, 'up'))
+    Args:
+        position (tuple[int, int]): The current position (x, y).
+        direction (str): The direction to move.
+
+    Returns:
+        tuple[tuple[int, int], None] | tuple[None, str]: The new position (x, y) if inputs are valid,
+        otherwise returns None and an error description.
+
+    Raises:
+        None: This function does not raise any specific exceptions.
+
+    Example:
+        file_path = f'imgs\\detect\\gate.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(get_move_position(frame, 'up'))
     """
+    if not isinstance(position, tuple) or len(position) != 2 or not all(isinstance(item, int) for item in position):
+        return None, f'position={position} should be tuple(int, int)'
+    if not isinstance(direction, str) or direction not in ['up', 'down', 'right', 'left', 'up-right', 'down-right',
+                                                           'up-left', 'down-left']:
+        return None, f'direction={direction} should be str'
+
     dx = 8
     dy = 8
     dxy = 5
     x_shift = SKIP_AREA_BOTTOM_RIGHT[0][0]
     y_shift = SKIP_AREA_BOTTOM_RIGHT[0][1]
     x, y = position
-    if type(x) is not int or type(y) is not int:
-        raise Exception(f'Invalid input type: x={x}, y={y}')
 
-    if in_direction == 'up':
+    if direction == 'up':
         new_x, new_y = x, y - dy
-    elif in_direction == 'down':
+    elif direction == 'down':
         new_x, new_y = x, y + dy
-    elif in_direction == 'right':
+    elif direction == 'right':
         new_x, new_y = x + dx, y
-    elif in_direction == 'left':
+    elif direction == 'left':
         new_x, new_y = x - dx, y
-    elif in_direction == 'up-right':
+    elif direction == 'up-right':
         new_x, new_y = x + dxy, y - dxy
-    elif in_direction == 'down-right':
+    elif direction == 'down-right':
         new_x, new_y = x + dxy, y + dxy
-    elif in_direction == 'up-left':
+    elif direction == 'up-left':
         new_x, new_y = x - dxy, y - dxy
-    else:  # 'down-left'
+    else:  # direction == 'down-left':
         new_x, new_y = x - dxy, y + dxy
 
-    if 0 > new_x - x_shift or new_x - x_shift > template_minimap.shape[1]-1:    # x
-        return None, None
-    elif 0 > new_y - y_shift or new_y - y_shift > template_minimap.shape[0]-1:    # y
-        return None, None
+    if not (0 <= new_x - x_shift < template_minimap.shape[1]) or not (0 <= new_y - y_shift < template_minimap.shape[0]):
+        return None, 'New position outside of minimap'
     elif template_minimap[new_y - y_shift, new_x - x_shift] != 255:
-        return None, None
+        return None, 'New position not accessible of minimap'
     else:
-        return int(new_x), int(new_y)
+        return (int(new_x), int(new_y)), None
 
 
 class Action:
@@ -1102,7 +1384,7 @@ class Action:
         self.steps = []
         self.step_idx = None
         self.t0 = None
-        self.TIMEOUT = 30   # sec
+        self.TIMEOUT = 30  # sec
 
     def can_be_started(self, *args, **kwargs):
         raise NotImplemented
@@ -1176,12 +1458,12 @@ class Actions:
         if self.current_action is not None:
             # finished?
             if self.current_action.result in [-1, 1]:
-                #self.printout()
+                # self.printout()
                 self.current_action = None
             # timeout?
             elif time.time() - self.current_action.t0 >= self.current_action.TIMEOUT:
                 self.current_action.set_result(-1, f'Reached timeout = {self.current_action.TIMEOUT} sec.')
-                #self.printout()
+                # self.printout()
                 self.current_action = None
             # process...
             else:
@@ -1215,28 +1497,44 @@ class ActionBasicAttack(Action):
             if kwargs.get('bot_pos_frame')['bounding_box']:
                 if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:
                     pass
-                else: return False, "bot_pos_frame['bounding_box'][0] is not integer"
-            else: return False, "bot_pos_frame['bounding_box'] is None"
-        else: return False, "bot_pos_frame is None"
+                else:
+                    return False, "bot_pos_frame['bounding_box'][0] is not integer"
+            else:
+                return False, "bot_pos_frame['bounding_box'] is None"
+        else:
+            return False, "bot_pos_frame is None"
 
         if kwargs.get('minions'):
             if kwargs.get('minions')['red']:
                 if kwargs.get('minions')['red'][0]:
                     if type(kwargs.get('minions')['red'][0][0]) is int:
                         pass
-                    else: return False, "minions['red'][0][0] is not integer"
-                else: return False, "minions['red'][0] is None"
-            else: return False, "minions['red'] is None"
-        else: return False, "minions is None"
+                    else:
+                        return False, "minions['red'][0][0] is not integer"
+                else:
+                    return False, "minions['red'][0] is None"
+            else:
+                return False, "minions['red'] is None"
+        else:
+            return False, "minions is None"
 
         return True, ''
 
     def process(self, *args, **kwargs):
-        bot_x, bot_y = kwargs.get('bot_pos_frame')['bounding_box']    # (center x, center y)
+        bot_x, bot_y = kwargs.get('bot_pos_frame')['bounding_box']  # (center x, center y)
         minions = kwargs.get('minions')['red']
 
         # get the position of the closest red minion == target
-        distances = [(get_distance_between_points((bot_x, bot_y), minion_pos), minion_pos) for minion_pos in minions]
+        distances = []
+        for minion_pos in minions:
+            dist, err_desc = get_distance_between_points((bot_x, bot_y), minion_pos)
+            if dist is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            distances.append((dist, minion_pos))
+        if len(distances) == 0:
+            self.set_result(-1, 'No distances to minions')  # error!
+            return
         distances.sort()
         distance, target = distances[0]  # float dist, (x, y)
 
@@ -1248,7 +1546,7 @@ class ActionBasicAttack(Action):
                           bot_y + (target[1] - bot_y) // 2
                 pyautogui.moveTo(*new_pos)
                 pyautogui.click(button='right')
-            else:   # already close to target
+            else:  # already close to target
                 self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'click_attack':
@@ -1276,35 +1574,48 @@ class ActionQAttack(Action):
             if kwargs.get('bot_pos_frame')['bounding_box']:
                 if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:
                     pass
-                else: return False, "bot_pos_frame['bounding_box'][0] is not integer"
-            else: return False, "bot_pos_frame['bounding_box'] is None"
-        else: return False, "bot_pos_frame is None"
+                else:
+                    return False, "bot_pos_frame['bounding_box'][0] is not integer"
+            else:
+                return False, "bot_pos_frame['bounding_box'] is None"
+        else:
+            return False, "bot_pos_frame is None"
 
         if kwargs.get('minions'):
             if kwargs.get('minions')['red']:
                 if kwargs.get('minions')['red'][0]:
                     if type(kwargs.get('minions')['red'][0][0]) is int:
                         pass
-                    else: return False, "minions['red'][0][0] is not integer"
-                else: return False, "minions['red'][0] is None"
-            else: return False, "minions['red'] is None"
-        else: return False, "minions is None"
+                    else:
+                        return False, "minions['red'][0][0] is not integer"
+                else:
+                    return False, "minions['red'][0] is None"
+            else:
+                return False, "minions['red'] is None"
+        else:
+            return False, "minions is None"
 
         if kwargs.get('cooldowns'):
             if not kwargs.get('cooldowns')['Q']:
                 pass
-            else: return False, "cooldowns['Q'] is True"
-        else: return False, "cooldowns is None"
+            else:
+                return False, "cooldowns['Q'] is True"
+        else:
+            return False, "cooldowns is None"
 
         return True, ''
 
     def process(self, *args, **kwargs):
         minions = kwargs.get('minions')
-        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']    # (center_x, center_y)
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']  # (center_x, center_y)
         cooldowns = kwargs.get('cooldowns')
 
         if self.point_attack is None:
-            self.point_attack = get_center_point_for_spell(minions, bot_pos, 'Q')
+            point_attack, err_desc = get_center_point_for_spell(minions, bot_pos, 'Q')
+            if point_attack is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            self.point_attack = point_attack
 
         if self.steps[self.step_idx] == 'choose_target':
             pyautogui.moveTo(self.point_attack)
@@ -1340,35 +1651,48 @@ class ActionWAttack(Action):
             if kwargs.get('bot_pos_frame')['bounding_box']:
                 if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:
                     pass
-                else: return False, "bot_pos_frame['bounding_box'][0] is not integer"
-            else: return False, "bot_pos_frame['bounding_box'] is None"
-        else: return False, "bot_pos_frame is None"
+                else:
+                    return False, "bot_pos_frame['bounding_box'][0] is not integer"
+            else:
+                return False, "bot_pos_frame['bounding_box'] is None"
+        else:
+            return False, "bot_pos_frame is None"
 
         if kwargs.get('minions'):
             if kwargs.get('minions')['red']:
                 if kwargs.get('minions')['red'][0]:
                     if type(kwargs.get('minions')['red'][0][0]) is int:
                         pass
-                    else: return False, "minions['red'][0][0] is not integer"
-                else: return False, "minions['red'][0] is None"
-            else: return False, "minions['red'] is None"
-        else: return False, "minions is None"
+                    else:
+                        return False, "minions['red'][0][0] is not integer"
+                else:
+                    return False, "minions['red'][0] is None"
+            else:
+                return False, "minions['red'] is None"
+        else:
+            return False, "minions is None"
 
         if kwargs.get('cooldowns'):
             if not kwargs.get('cooldowns')['W']:
                 pass
-            else: return False, "cooldowns['W'] is True"
-        else: return False, "cooldowns is None"
+            else:
+                return False, "cooldowns['W'] is True"
+        else:
+            return False, "cooldowns is None"
 
         return True, ''
 
     def process(self, *args, **kwargs):
         minions = kwargs.get('minions')
-        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']    # (center_x, center_y)
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']  # (center_x, center_y)
         cooldowns = kwargs.get('cooldowns')
 
         if self.point_attack is None:
-            self.point_attack = get_center_point_for_spell(minions, bot_pos, 'W')
+            point_attack, err_desc = get_center_point_for_spell(minions, bot_pos, 'W')
+            if point_attack is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            self.point_attack = point_attack
 
         if self.steps[self.step_idx] == 'choose_target':
             pyautogui.moveTo(self.point_attack)
@@ -1406,28 +1730,37 @@ class ActionUseWell(Action):
         if kwargs.get('frame') is not None:
             if type(kwargs.get('frame')) is np.ndarray:
                 pass
-            else: return False, 'frame is not np.ndarray'
-        else: return False, 'frame is None'
+            else:
+                return False, 'frame is not np.ndarray'
+        else:
+            return False, 'frame is None'
 
         if kwargs.get('bot_pos_minimap'):
-            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:  # x
                 pass
-            else: return False, "bot_pos_minimap[0] is not integer"
-        else: return False, "bot_pos_minimap is None"
+            else:
+                return False, "bot_pos_minimap[0] is not integer"
+        else:
+            return False, "bot_pos_minimap is None"
 
         if kwargs.get('cooldowns'):
             if not kwargs.get('cooldowns')['well']:
                 pass
-            else: return False, "cooldowns['well'] is True"
-        else: return False, "cooldowns is None"
+            else:
+                return False, "cooldowns['well'] is True"
+        else:
+            return False, "cooldowns is None"
 
         if kwargs.get('bot_health'):
-            if type(kwargs.get('bot_health')[0]) is int:    # current
+            if type(kwargs.get('bot_health')[0]) is int:  # current
                 if int(kwargs.get('bot_health')[0]) < 0.9 * int(kwargs.get('bot_health')[1]):  # current < max
                     pass
-                else: return False, "bot_health: current value > 0.9*max value"
-            else: return False, "bot_health[0] is not integer"
-        else: return False, "bot_health is None"
+                else:
+                    return False, "bot_health: current value > 0.9*max value"
+            else:
+                return False, "bot_health[0] is not integer"
+        else:
+            return False, "bot_health is None"
 
         return True, ''
 
@@ -1442,15 +1775,20 @@ class ActionUseWell(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_gate':
-            if is_bot_icon_in_place(bot_pos_minimap, 'gate'):
+            in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'gate')
+            if in_place is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            if in_place:
                 self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'find_well':
-            self.well_x, self.well_y = get_well_position(frame)
-            if None not in [self.well_x, self.well_y]:
-                self.step_idx += 1
-            else:
-                self.set_result(-1, 'Could not find well')
+            well_pos, err_desc = get_well_position(frame)
+            if well_pos is None:
+                self.set_result(-1, err_desc)   # error!
+                return
+            self.well_x, self.well_y = well_pos
+            self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'click_well':
             pyautogui.moveTo(self.well_x, self.well_y)
@@ -1480,18 +1818,26 @@ class ActionHideInBushes(Action):
         if kwargs.get('frame') is not None:
             if type(kwargs.get('frame')) is np.ndarray:
                 pass
-            else: return False, 'frame is not np.ndarray'
-        else: return False, 'frame is None'
+            else:
+                return False, 'frame is not np.ndarray'
+        else:
+            return False, 'frame is None'
 
         if kwargs.get('bot_pos_minimap'):
-            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:  # x
                 pass
-            else: return False, "bot_pos_minimap[0] is not integer"
-        else: return False, "bot_pos_minimap is None"
+            else:
+                return False, "bot_pos_minimap[0] is not integer"
+        else:
+            return False, "bot_pos_minimap is None"
 
-        if not is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'bush'):
+        in_place, err_desc = is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'bush')
+        if in_place is None:
+            return False, err_desc
+        if not in_place:
             pass
-        else: return False, "bot is already in bushes"
+        else:
+            return False, "bot is already in bushes"
 
         return True, ''
 
@@ -1505,16 +1851,23 @@ class ActionHideInBushes(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_bushes':
-            if is_bot_icon_in_place(bot_pos_minimap, 'bush'):
+            in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'bush')
+            if in_place is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            if in_place:
                 self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'hidden':
             try:
                 idx = self.hidden_values.index(None)
-                val = is_bot_hidden(frame)
-                if val:
+                is_hidden, err_desc = is_bot_hidden(frame)
+                if is_hidden is None:
+                    self.set_result(-1, err_desc)  # error!
+                    return
+                if is_hidden:
                     self.set_result(1, '')  # bot is hidden
-                self.hidden_values[idx] = val
+                self.hidden_values[idx] = is_hidden
             except ValueError:
                 self.set_result(-1, "Bot is not hidden in bushes")
 
@@ -1533,14 +1886,20 @@ class ActionHideBehindGate(Action):
         # - bot not at gate
 
         if kwargs.get('bot_pos_minimap'):
-            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:  # x
                 pass
-            else: return False, "bot_pos_minimap[0] is not integer"
-        else: return False, "bot_pos_minimap is None"
+            else:
+                return False, "bot_pos_minimap[0] is not integer"
+        else:
+            return False, "bot_pos_minimap is None"
 
-        if not is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate'):
+        in_place, err_desc = is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate')
+        if in_place is None:
+            return False, err_desc
+        if not in_place:
             pass
-        else: return False, "bot is already at gate"
+        else:
+            return False, "bot is already at gate"
 
         return True, ''
 
@@ -1553,7 +1912,11 @@ class ActionHideBehindGate(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_gate':
-            if is_bot_icon_in_place(bot_pos_minimap, 'gate'):
+            in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'gate')
+            if in_place is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            if in_place:
                 self.set_result(1, '')  # finished
             else:
                 try:
@@ -1588,27 +1951,38 @@ class ActionEscapeBehindGate(Action):
 
         if kwargs.get('bot_pos_frame'):
             if kwargs.get('bot_pos_frame')['circle']:
-                if type(kwargs.get('bot_pos_frame')['circle'][0]) is int:		# x
+                if type(kwargs.get('bot_pos_frame')['circle'][0]) is int:  # x
                     pass
-                else: return False, "bot_pos_frame['circle'][0] is not integer"
-            else: return False, "bot_pos_frame['circle'] is None"
-        else: return False, "bot_pos_frame is None"
+                else:
+                    return False, "bot_pos_frame['circle'][0] is not integer"
+            else:
+                return False, "bot_pos_frame['circle'] is None"
+        else:
+            return False, "bot_pos_frame is None"
 
         if kwargs.get('bot_pos_minimap'):
-            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:  # x
                 pass
-            else: return False, "bot_pos_minimap[0] is not integer"
-        else: return False, "bot_pos_minimap is None"
+            else:
+                return False, "bot_pos_minimap[0] is not integer"
+        else:
+            return False, "bot_pos_minimap is None"
 
         if kwargs.get('cooldowns'):
             if not kwargs.get('cooldowns')['E']:
                 pass
-            else: return False, "cooldowns['E'] is True"
-        else: return False, "cooldowns is None"
+            else:
+                return False, "cooldowns['E'] is True"
+        else:
+            return False, "cooldowns is None"
 
-        if not is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate'):
+        in_place, err_desc = is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'gate')
+        if in_place is None:
+            return False, err_desc
+        if not in_place:
             pass
-        else: return False, "bot is already at gate"
+        else:
+            return False, "bot is already at gate"
 
         return True, ''
 
@@ -1655,7 +2029,11 @@ class ActionEscapeBehindGate(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_gate':
-            if is_bot_icon_in_place(bot_pos_minimap, 'gate'):
+            in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'gate')
+            if in_place is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            if in_place:
                 self.set_result(1, '')  # finished
             else:
                 try:
@@ -1687,22 +2065,29 @@ class ActionUseSpellD(Action):
         if kwargs.get('frame') is not None:
             if type(kwargs.get('frame')) is np.ndarray:
                 pass
-            else: return False, 'frame is not np.ndarray'
-        else: return False, 'frame is None'
+            else:
+                return False, 'frame is not np.ndarray'
+        else:
+            return False, 'frame is None'
 
         if kwargs.get('cooldowns'):
             if not kwargs.get('cooldowns')['D']:
                 pass
-            else: return False, "cooldowns['D'] is True"
-        else: return False, "cooldowns is None"
+            else:
+                return False, "cooldowns['D'] is True"
+        else:
+            return False, "cooldowns is None"
 
         if kwargs.get('bot_health'):
-            if type(kwargs.get('bot_health')[0]) is int:    # current
+            if type(kwargs.get('bot_health')[0]) is int:  # current
                 if int(kwargs.get('bot_health')[0]) < 0.9 * int(kwargs.get('bot_health')[1]):  # current < max
                     pass
-                else: return False, "bot_health: current value > 0.9*max value"
-            else: return False, "bot_health[0] is not integer"
-        else: return False, "bot_health is None"
+                else:
+                    return False, "bot_health: current value > 0.9*max value"
+            else:
+                return False, "bot_health[0] is not integer"
+        else:
+            return False, "bot_health is None"
 
         return True, ''
 
@@ -1759,14 +2144,16 @@ class ActionMove(Action):
         # - move direction can be reached
 
         if kwargs.get('bot_pos_minimap'):
-            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:  # x
                 pass
-            else: return False, "bot_pos_minimap[0] is not integer"
-        else: return False, "bot_pos_minimap is None"
+            else:
+                return False, "bot_pos_minimap[0] is not integer"
+        else:
+            return False, "bot_pos_minimap is None"
 
-        if None not in get_move_position(kwargs.get('bot_pos_minimap'), self.direction):
-            pass
-        else: return False, "direction unreachable"
+        pos, err_desc = get_move_position(kwargs.get('bot_pos_minimap'), self.direction)
+        if pos is None:
+            return False, err_desc
 
         return True, ''
 
@@ -1774,7 +2161,11 @@ class ActionMove(Action):
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
 
         if self.x is None or self.y is None:
-            self.x, self.y = get_move_position(bot_pos_minimap, self.direction)
+            pos, err_desc = get_move_position(bot_pos_minimap, self.direction)
+            if pos is None:
+                self.set_result(-1, err_desc)   # error!
+                return
+            self.x, self.y = pos
 
         if self.steps[self.step_idx] == 'click_position':
             pyautogui.moveTo(self.x, self.y)
@@ -1807,12 +2198,17 @@ class ActionRunMiddle(Action):
         # - bot not at middle
 
         if kwargs.get('bot_pos_minimap'):
-            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:  # x
                 pass
-            else: return False, "bot_pos_minimap[0] is not integer"
-        else: return False, "bot_pos_minimap is None"
+            else:
+                return False, "bot_pos_minimap[0] is not integer"
+        else:
+            return False, "bot_pos_minimap is None"
 
-        if not is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'middle'):
+        in_place, err_desc = is_bot_icon_in_place(kwargs.get('bot_pos_minimap'), 'middle')
+        if in_place is None:
+            return False, err_desc
+        if not in_place:
             pass
         else:
             return False, "bot is already in middle"
@@ -1828,7 +2224,11 @@ class ActionRunMiddle(Action):
             self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'at_middle':
-            if is_bot_icon_in_place(bot_pos_minimap, 'middle'):
+            in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'middle')
+            if in_place is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            if in_place:
                 self.set_result(1, '')  # finished
             else:
                 try:
@@ -1858,39 +2258,51 @@ class ActionCollectGlobes(Action):
 
         if kwargs.get('bot_pos_frame'):
             if kwargs.get('bot_pos_frame')['bounding_box']:
-                if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:		# x
+                if type(kwargs.get('bot_pos_frame')['bounding_box'][0]) is int:  # x
                     pass
-                else: return False, "bot_pos_frame['bounding_box'][0] is not integer"
-            else: return False, "bot_pos_frame['bounding_box'] is None"
-        else: return False, "bot_pos_frame is None"
+                else:
+                    return False, "bot_pos_frame['bounding_box'][0] is not integer"
+            else:
+                return False, "bot_pos_frame['bounding_box'] is None"
+        else:
+            return False, "bot_pos_frame is None"
 
         if kwargs.get('bot_pos_minimap'):
-            if type(kwargs.get('bot_pos_minimap')[0]) is int:   # x
+            if type(kwargs.get('bot_pos_minimap')[0]) is int:  # x
                 pass
-            else: return False, "bot_pos_minimap[0] is not integer"
-        else: return False, "bot_pos_minimap is None"
+            else:
+                return False, "bot_pos_minimap[0] is not integer"
+        else:
+            return False, "bot_pos_minimap is None"
 
         if kwargs.get('minions'):
             if kwargs.get('minions')['red']:
                 if kwargs.get('minions')['red'][0]:
                     if type(kwargs.get('minions')['red'][0][0]) is int:
                         pass
-                    else: return False, "minions['red'][0][0] is not integer"
-                else: return False, "minions['red'][0] is None"
-            else: return False, "minions['red'] is None"
-        else: return False, "minions is None"
+                    else:
+                        return False, "minions['red'][0][0] is not integer"
+                else:
+                    return False, "minions['red'][0] is None"
+            else:
+                return False, "minions['red'] is None"
+        else:
+            return False, "minions is None"
 
         return True, ''
 
     def process(self, *args, **kwargs):
-        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']    # (center_x, center_y)
+        bot_pos = kwargs.get('bot_pos_frame')['bounding_box']  # (center_x, center_y)
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
         minions = kwargs.get('minions')
 
         if self.point_target is None:
             # get position in the center of the group
-            point_center = get_center_point_for_spell(minions, bot_pos, 'Q')
-            diff = (point_center[0]-bot_pos[0]) // 16, (point_center[1]-bot_pos[1]) // 16,
+            point_center, err_desc = get_center_point_for_spell(minions, bot_pos, 'Q')
+            if point_center is None:
+                self.set_result(-1, err_desc)  # error!
+                return
+            diff = (point_center[0] - bot_pos[0]) // 16, (point_center[1] - bot_pos[1]) // 16,
             self.point_target = (bot_pos_minimap[0] + diff[0], bot_pos_minimap[1] + diff[1])
 
         if self.steps[self.step_idx] == 'click_target':
@@ -1900,7 +2312,8 @@ class ActionCollectGlobes(Action):
 
         elif self.steps[self.step_idx] == 'at_target':
             x, y = bot_pos_minimap
-            if self.point_target[0]-4 <= x <= self.point_target[0]+4 and self.point_target[1]-4 <= y <= self.point_target[1]+4:
+            if self.point_target[0] - 4 <= x <= self.point_target[0] + 4 and self.point_target[1] - 4 <= y <= \
+                    self.point_target[1] + 4:
                 self.set_result(1, '')  # finished
             else:
                 try:

@@ -128,10 +128,10 @@ class Spectator:
         # cv.imshow('Computer Vision', screenshot)
 
         # BOT
-        bot_dead = is_bot_dead(frame)
+        bot_dead, err_desc = is_bot_dead(frame)
         if not bot_dead:
             bot_pos_frame, desc = get_bot_positions(frame_hsv)
-            if bot_pos_frame:
+            if type(bot_pos_frame) is dict and len(bot_pos_frame) > 0:
                 bot_pos_frame = {'health_bar': bot_pos_frame['health_bar'][1],
                                  'bounding_box': bot_pos_frame['bounding_box'][1],
                                  'circle': bot_pos_frame['circle'][1]}
@@ -139,10 +139,12 @@ class Spectator:
                 bot_pos_frame = {'health_bar': (None, None),
                                  'bounding_box': (None, None),
                                  'circle': (None, None)}
-            bot_pos_minimap = get_bot_icon_position(frame)   # (x, y) or (None, None)
-            bot_health = get_bot_health_value(frame)   # (curr, max) or (None, None)
-            bot_mana = get_bot_mana_value(frame)   # (curr, max) or (None, None)
-            cooldowns = get_cooldowns(frame)    # {'Q': False, 'W': False, 'E': False, 'R': False, 'D': False, 'well': False}
+            bot_pos_minimap, desc = get_bot_icon_position(frame)   # (x, y) or (None, None)
+            if bot_pos_minimap is None:
+                bot_pos_minimap = (None, None)  # error
+            bot_health, err_desc = get_bot_health_value(frame)   # (curr, max) or (None, None)
+            bot_mana, err_desc = get_bot_mana_value(frame)   # (curr, max) or (None, None)
+            cooldowns, err_desc = get_cooldowns(frame)    # {'Q': False, 'W': False, 'E': False, 'R': False, 'D': False, 'well': False}
         else:
             bot_pos_frame = {'health_bar': (None, None), 'bounding_box': (None, None), 'circle': (None, None)}
             bot_pos_minimap = (None, None)
@@ -151,10 +153,10 @@ class Spectator:
             cooldowns = {'Q': True, 'W': True, 'E': True, 'R': True, 'D': True, 'well': True}
 
         # MINIONS
-        minions = get_minions_positions(frame, frame_hsv)   # {'blue': [(x_center, y_center), ...], 'red': [(x_center, y_center), ...]}
+        minions, err_desc = get_minions_positions(frame, frame_hsv)   # {'blue': [(x_center, y_center), ...], 'red': [(x_center, y_center), ...]}
 
         # XP
-        xp = get_xp_from_level(frame)
+        xp, err_desc = get_xp_from_level(frame)
 
         self.data = {
             'frame': frame,
@@ -188,7 +190,9 @@ class Spectator:
                         result = self.actions.current_action.result
                         description = self.actions.current_action.description
                 # exit when self.actions.current_action is None
-                xp_current = get_xp_from_level(self.data['frame'], xp_prev=xp_prev)
+                xp_current, err_desc = get_xp_from_level(self.data['frame'], xp_prev=xp_prev)
+                if xp_current is None:
+                    return -1, f'Action failed during process. Reason:{err_desc}', 0
                 return result, description, xp_current-xp_prev
             else:
                 return -1, f'Action failed at starting. Reason:{f_started_desc}', 0
@@ -214,7 +218,7 @@ class Spectator:
             x_bot, y_bot = self.data['bot_pos_frame']['bounding_box']
             out = []
             for x_minion, y_minion in self.data['minions'][color]:    # [(x_center, y_center), ...]
-                dist = get_distance_between_points((x_bot, y_bot), (x_minion, y_minion))
+                dist = get_distance_between_points((x_bot, y_bot), (x_minion, y_minion))[0]
                 out.append((dist, (x_bot-x_minion, y_bot-y_minion)))
             out.sort()
             return out[0][1]
