@@ -60,7 +60,7 @@ def get_centroid_point(list_of_points: List[Tuple[int, int]]) -> tuple[tuple[int
         return None, str(e)
 
 
-def point_inside_polygon(x: int, y: int, poly: List[int, Tuple[int, int], int, Tuple[int, int]]) \
+def point_inside_polygon(x: int, y: int, poly: List[Union[int, Tuple[int, int]]]) \
         -> tuple[bool, None] | tuple[None, str]:
     """
     Check if a point is inside a polygon.
@@ -68,7 +68,7 @@ def point_inside_polygon(x: int, y: int, poly: List[int, Tuple[int, int], int, T
     Args:
         x (int): The x-coordinate of the point.
         y (int): The y-coordinate of the point.
-        poly (List[int, Tuple[int, int], int, Tuple[int, int]]): polygon
+        poly ([ int, Tuple[int, int], int, Tuple[int, int] ]): polygon
 
     Returns:
         tuple[bool, None] | tuple[None, str]: True if the point is inside the polygon, False otherwise,
@@ -240,7 +240,8 @@ def get_minions_positions(frame: np.ndarray, hsv_frame: np.ndarray) -> tuple[dic
                     points = [(x_min, y_min), (x_max, y_min), (x_max, y_max), (x_min, y_max)]
                     polygon = [box[0], (box[1][0], box[0][1]), box[1], (box[0][0], box[1][1])]
                     for point in points:
-                        if point_inside_polygon(point[0], point[1], polygon)[0]:
+                        inside, err_desc = point_inside_polygon(point[0], point[1], polygon)
+                        if inside:
                             success = False
                             break
                     if not success:
@@ -1386,7 +1387,7 @@ class Action:
         self.t0 = None
         self.TIMEOUT = 30  # sec
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         raise NotImplemented
 
     def start(self):
@@ -1430,7 +1431,7 @@ class Actions:
     def get_available_actions(self, *args, **kwargs):
         out = []
         for name, action in self.objects.items():
-            if action.can_be_started(*args, **kwargs):
+            if action.is_available(*args, **kwargs):
                 out.append(name)
         return out
 
@@ -1489,7 +1490,7 @@ class ActionBasicAttack(Action):
             'click_attack'
         ]
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - bot position available
         # - at least one red minion
 
@@ -1565,7 +1566,7 @@ class ActionQAttack(Action):
         ]
         self.point_attack = None
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - bot position available
         # - at least one red minion
         # - Q spell available
@@ -1642,7 +1643,7 @@ class ActionWAttack(Action):
         ]
         self.point_attack = None
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - bot position available
         # - at least one red minion
         # - W spell available
@@ -1721,11 +1722,11 @@ class ActionUseWell(Action):
         ]
         self.well_x, self.well_y = None, None
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - frame is available
         # - bot_pos_minimap is available
         # - well not on cooldown
-        # - bot's health < max
+        # - bot's health < 0.9 *max
 
         if kwargs.get('frame') is not None:
             if type(kwargs.get('frame')) is np.ndarray:
@@ -1810,7 +1811,7 @@ class ActionHideInBushes(Action):
         ]
         self.hidden_values = [None] * 10
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - frame is available
         # - bot_pos_minimap is available
         # - bot not in bushes
@@ -1881,7 +1882,7 @@ class ActionHideBehindGate(Action):
         ]
         self.diff_values = [None] * 10
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - bot pos icon is available
         # - bot not at gate
 
@@ -1943,7 +1944,7 @@ class ActionEscapeBehindGate(Action):
         self.t1 = None
         self.timeout1 = 5  # [sec]
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - bot position available
         # - bot position minimap available
         # - E spell not on cooldown
@@ -2057,10 +2058,9 @@ class ActionUseSpellD(Action):
         self.t1 = None
         self.timeout1 = 5  # [sec]
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - frame is available
         # - spell D not on cooldown
-        # - bots' health < max
 
         if kwargs.get('frame') is not None:
             if type(kwargs.get('frame')) is np.ndarray:
@@ -2077,17 +2077,6 @@ class ActionUseSpellD(Action):
                 return False, "cooldowns['D'] is True"
         else:
             return False, "cooldowns is None"
-
-        if kwargs.get('bot_health'):
-            if type(kwargs.get('bot_health')[0]) is int:  # current
-                if int(kwargs.get('bot_health')[0]) < 0.9 * int(kwargs.get('bot_health')[1]):  # current < max
-                    pass
-                else:
-                    return False, "bot_health: current value > 0.9*max value"
-            else:
-                return False, "bot_health[0] is not integer"
-        else:
-            return False, "bot_health is None"
 
         return True, ''
 
@@ -2139,7 +2128,7 @@ class ActionMove(Action):
         self.t1 = None
         self.timeout1 = 3  # [sec]
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - bot position minimap available
         # - move direction can be reached
 
@@ -2193,7 +2182,7 @@ class ActionRunMiddle(Action):
         ]
         self.diff_values = [None] * 10
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - bot pos icon is available
         # - bot not at middle
 
@@ -2251,7 +2240,7 @@ class ActionCollectGlobes(Action):
         self.point_target = None
         self.diff_values = [None] * 10
 
-    def can_be_started(self, *args, **kwargs):
+    def is_available(self, *args, **kwargs):
         # - bot position available
         # - bot icon position available
         # - at least one red minion

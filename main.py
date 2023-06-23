@@ -6,11 +6,20 @@
 #       -> ensure that functions are prepared for NONE type returns
 # ----------------------------------------------------------------------------------------------------------
 import keras
+
+import spectator_lib
 from gym_lib import env
 from gym_lib import build_model, build_agent, train_agent
 import numpy as np
 import datetime
 
+"""
+s = spectator_lib.Spectator()
+s.init_game()
+action_name = 'use_spell_d'
+result, description, xp_gain = s.execute_action(action_name)
+print(f'Action:{action_name}, Result:{result}, Desc:{description}, XP_gain:{xp_gain}')
+"""
 
 """
 episodes = 2
@@ -28,18 +37,21 @@ for episode in range(1, episodes + 1):
     print('Episode:{} Score:{}'.format(episode, score))
 """
 
-
-num_steps = 70
+num_steps = 500
 # load model
-model = keras.models.load_model('rl/models/230618_222231_plus441.h5')
+model = keras.models.load_model('rl/models/230623_133436_plus1757.h5')
 
 states = env.observation_space.shape[0]
 actions = env.action_space.n
 #model = build_model(states, actions)
 agent = build_agent(model, actions, num_steps)
-agent, hist = train_agent(agent, env, num_steps)
+#agent, hist = train_agent(agent, env, num_steps)
+
+scores = model.test(env, nb_episodes=2, visualize=False)
+print(np.mean(scores.history['episode_reward']))
 
 # save model
+"""
 try:
     max_xp_ep = int(max(hist.history['episode_reward']))
     print('History', hist.history)
@@ -52,7 +64,7 @@ except Exception:
 model_path = f'rl/models/{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{max_xp_ep}.h5'
 model.save(model_path)
 #model.save_weights(f'rl/models/{name}_weights.h5', overwrite=True)
-
+"""
 
 # test model
 #scores = model.test(env, nb_episodes=2, visualize=False)

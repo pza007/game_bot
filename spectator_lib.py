@@ -61,7 +61,15 @@ class Spectator:
                 prev_pos = new_pos
             raise Exception(f'Bot still not stopped after {max_time} sec of waiting')
 
-        def wait_bot_at_gate(max_time=20):
+        def reset_level():
+            pyautogui.moveTo(221, 70)   # "Set Level" button
+            pyautogui.click(button='left')
+            time.sleep(1)
+            pyautogui.click(button='left')
+            time.sleep(1)
+            pyautogui.press('y')  # demount
+
+        def wait_bot_at_gate(max_time=10):
             self.get_data()
             self.actions = Actions()
             #f_can, f_can_desc = self.actions.objects['hide_behind_gate'].can_be_started(**self.data)
@@ -96,10 +104,8 @@ class Spectator:
 
         self.get_data()
 
-        # bot alive?
-        wait_bot_alive()
-        # bot stopped?
-        wait_bot_stopped()
+        #wait_bot_alive() and  wait_bot_stopped() -> simplified: reset_level()
+        reset_level()
         # bot at gate?
         wait_bot_at_gate()
         # refresh_forts
@@ -179,10 +185,10 @@ class Spectator:
         xp_prev = self.data['xp']
 
         result, description = None, None
-        f_can, f_can_desc = self.actions.objects[action_name].can_be_started(**self.data)
-        if f_can:
-            f_started, f_started_desc = self.actions.start(action_name)
-            if f_started:
+        is_available, err_desc = self.actions.objects[action_name].is_available(**self.data)
+        if is_available:
+            started, err_desc = self.actions.start(action_name)
+            if started:
                 while self.actions.current_action is not None:
                     self.actions.process(**self.data)
                     self.get_data()
@@ -195,9 +201,9 @@ class Spectator:
                     return -1, f'Action failed during process. Reason:{err_desc}', 0
                 return result, description, xp_current-xp_prev
             else:
-                return -1, f'Action failed at starting. Reason:{f_started_desc}', 0
+                return -1, f'Action failed at starting. Reason:{err_desc}', 0
         else:
-            return -1, f'Action cannot be started. Reason:{f_can_desc}', 0
+            return -1, f'Action is not available. Reason:{err_desc}', 0
         # self.actions.printout()
         #list_of_actions = self.actions.get_available_actions(**self.data)
 
@@ -218,7 +224,7 @@ class Spectator:
             x_bot, y_bot = self.data['bot_pos_frame']['bounding_box']
             out = []
             for x_minion, y_minion in self.data['minions'][color]:    # [(x_center, y_center), ...]
-                dist = get_distance_between_points((x_bot, y_bot), (x_minion, y_minion))[0]
+                dist, err_desc = get_distance_between_points((x_bot, y_bot), (x_minion, y_minion))
                 out.append((dist, (x_bot-x_minion, y_bot-y_minion)))
             out.sort()
             return out[0][1]
