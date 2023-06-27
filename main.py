@@ -1,17 +1,6 @@
-# TODO
-#   - improve reward function
-#   -
-#   - in functions.py
-#       -> errors(previous exceptions) will be reported in logger
-#       -> ensure that functions are prepared for NONE type returns
-# ----------------------------------------------------------------------------------------------------------
-import keras
+import os
+import gym_lib
 
-import spectator_lib
-from gym_lib import env
-from gym_lib import build_model, build_agent, train_agent
-import numpy as np
-import datetime
 
 """
 s = spectator_lib.Spectator()
@@ -37,36 +26,28 @@ for episode in range(1, episodes + 1):
     print('Episode:{} Score:{}'.format(episode, score))
 """
 
-num_steps = 500
-# load model
-model = keras.models.load_model('rl/models/230623_133436_plus1757.h5')
+# plot data
+#gym_lib.plot_training_history('rl/models/230627_114638_plus1771_data.json')
 
-states = env.observation_space.shape[0]
-actions = env.action_space.n
-#model = build_model(states, actions)
-agent = build_agent(model, actions, num_steps)
-#agent, hist = train_agent(agent, env, num_steps)
-
-scores = model.test(env, nb_episodes=2, visualize=False)
-print(np.mean(scores.history['episode_reward']))
+# train model
+gym_lib.num_steps = 8000    # = 5 hours of work
+agent, hist = gym_lib.train_agent(gym_lib.agent, gym_lib.env, gym_lib.num_steps)
 
 # save model
-"""
-try:
-    max_xp_ep = int(max(hist.history['episode_reward']))
-    print('History', hist.history)
-    if max_xp_ep > 0:
-        max_xp_ep = 'plus' + str(max_xp_ep)
-    else:
-        max_xp_ep = 'minus' + str(abs(max_xp_ep))
-except Exception:
-    max_xp_ep = 'none'
-model_path = f'rl/models/{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{max_xp_ep}.h5'
-model.save(model_path)
-#model.save_weights(f'rl/models/{name}_weights.h5', overwrite=True)
-"""
+gym_lib.save_model(hist)
+
+# shutdown PC
+os.system("shutdown /s /t 1")
+
+
+
+
 
 # test model
+#from keras.optimizers import Adam
+#agent.compile(Adam(learning_rate=1e-3), metrics=['mae'])
+#scores = agent.test(env, nb_episodes=2, visualize=False)
+#print(np.mean(scores.history['episode_reward']))
 #scores = model.test(env, nb_episodes=2, visualize=False)
 #print(np.mean(scores.history['episode_reward']))
 

@@ -1,5 +1,3 @@
-import time
-
 from rl.memory import SequentialMemory
 from rl.policy import BoltzmannQPolicy
 from rl.agents.dqn import DQNAgent
@@ -10,33 +8,34 @@ import math
 import gym
 from gym.wrappers import FlattenObservation
 from keras.optimizers import Adam   #from tensorflow.keras.optimizers.legacy import Adam
-
-import spectator_lib
 from spectator_lib import Spectator
+from global_vars import SCREEN_DIAG
+import matplotlib.pyplot as plt
+import datetime
+import json
 
 
 class MyEnv(gym.Env):
     def __init__(self):
         # (0,1)             18 possible actions
         self.action_space = gym.spaces.Discrete(18)
-        # (uint)            bot health current, max
-        # (uint)
-        # (uint)            bot mana current, max
-        # (uint)
-        # (int16)           vector (dx,dy) from gate to bot's icon  !(minimap)!
-        # (int16)
-        # (int16)           vector (dx,dy) from bot to the closest blue minion (screen)
-        # (int16)
-        # (int16)           vector (dx,dy) from bot to the closest red minion (screen)
-        # (int16)
-        # (0,1)             bot cooldowns
-        # (0,1)
-        # (0,1)
-        # (0,1)
-        # (0,1)
-        # (0,1)
-        self.observation_space = gym.spaces.Box(low=-2000, high=2000, shape=(1, 16), dtype=np.int16)  # Integer (-32768 to 32767)
+        # out[0]      float [0.0; 1.0]     bot health = current / max
+        # out[1]      float [0.0; 1.0]     bot mana = current / max
+        # out[2]      float [0.0; 1.0]     distance on minimap between gate and bot's icon = distance/100
+        # out[3]      float [0.0; 1.0]     distance on screen between bot and closest BLUE minion = 1/distance
+        # out[4]      float [0.0; 1.0]     distance on screen between bot and closest RED minion = 1/distance
+        # out[5..10]  6*int [0 or 1]       6*cooldown value
+        self.observation_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(1, 11), dtype=np.float32)
         self.spectator = Spectator()
+        self.buffer = {1:
+                           {'reward_total': 0.0,
+                            'xp_total': 0,
+                            'num_steps': 0,
+                            'steps': {1: {'reward': 0, 'action_result': 0, 'action_result_desc': '', 'action_name': '', 'observation': [0]*11}}
+                            }
+                       }
+        self.episode_num = 1
+        self.step_num = 1
 
         self._prev_observation = None
         self._observation = None
@@ -46,6 +45,7 @@ class MyEnv(gym.Env):
         self._action_result_desc = None
         self._reward = 0
         self._reward_total = 0
+        self._xp_total = None
         self._done = False
         self._done_reason = None
 
@@ -58,10 +58,54 @@ class MyEnv(gym.Env):
         self._action_result_desc = None
         self._reward = 0
         self._reward_total = 0
+        self._xp_total = None
         self._done = False
         self._done_reason = None
 
     def get_info(self):
+        global model
+        """
+        self.buffer = {1:
+                        {'reward_total': 0.0,
+                         'xp_total': 0,
+                         'num_steps': 0,
+                         'steps': {1: {'reward': 0, 'action_result': 0, 'action_result_desc': '', 'action_name': '', 'observation': [0]*11}}
+                         }
+        """
+        if self._done:
+            # xp_total
+            if self._xp_total is None:
+                xp_total = -1
+            else:
+                xp_total = self._xp_total
+            self.buffer[self.episode_num]['xp_total'] = xp_total
+            # save weights if xp_total is high
+            if xp_total > 1000:
+                model.save_weights(f'rl/models/weights_ep{self.episode_num}_xp{xp_total}.h5', overwrite=True)
+
+            # create new episode entry
+            self.episode_num += 1
+            self.step_num = 1
+            self.buffer[self.episode_num] = \
+                {'reward_total': 0.0,
+                 'xp_total': 0,
+                 'num_steps': 0,
+                 'steps': {1: {'reward': 0, 'action_result': 0, 'action_result_desc': '', 'action_name': '', 'observation': [0]*11}}
+                 }
+        else:
+            # fill episode parameters
+            self.buffer[self.episode_num]['reward_total'] = self._reward_total
+            self.buffer[self.episode_num]['num_steps'] = self.step_num
+            self.buffer[self.episode_num]['steps'][self.step_num] = \
+                {'reward': self._reward,
+                 'action_result': self._action_result,
+                 'action_result_desc': self._action_result_desc,
+                 'action_name': self._action_name,
+                 'observation': self._observation}
+
+            self.step_num += 1
+
+        """
         if self._done:
             out_str = f' Reward={self._reward}, Total={self._reward_total}. Game finished: reason={self._done_reason}, '
         else:
@@ -71,22 +115,37 @@ class MyEnv(gym.Env):
                 out_str = f' Reward={self._reward}.\tfailed action={self._action_name}, reason={self._action_result_desc}.'
         print(out_str)
         return {'info': out_str}
+        """
+        return {'info': ''}
 
     def render(self, mode="human"):
         pass
 
     def reset(self, seed=None, options=None):
-        print('......Reseting......')
         super().reset(seed=seed)    # reset seed if you want to use here: self.np_random.integers(0, 1)
         self.reset_parameters()
         self.spectator.init_game()
-        return [0]*16, {}
+        return [0]*11, {}
 
     def step(self, action):
         step_reward = None
 
         # done
         self._done, self._done_reason = self.spectator.is_game_finished()
+
+        # xp_total (actual experience gathered in game, from first to last step of episode)
+        if self.step_num == 1:
+            xp_value, err_desc = self.spectator.get_xp_value()
+            if xp_value is not None:
+                self._xp_total = xp_value
+            else:
+                self._xp_total = None
+        if self._done and self._xp_total is not None:
+            xp_value, err_desc = self.spectator.get_xp_value()
+            if xp_value is not None:
+                self._xp_total = max(xp_value - self._xp_total, 0)
+            else:
+                self._xp_total = None
 
         # action, result
         if not self._done:  # wait for action to be finished
@@ -110,24 +169,13 @@ class MyEnv(gym.Env):
         return self._observation, self._reward, self._done, False, self.get_info()
 
     def get_reward(self, step_reward):
-        """
-        out: reward
-        """
-        def get_dist_change(prev_vector, curr_vector):
-            if prev_vector != (0, 0) and curr_vector != (0, 0):
-                prev_dist = math.sqrt(prev_vector[0] ** 2 + prev_vector[1] ** 2)
-                curr_dist = math.sqrt(curr_vector[0] ** 2 + curr_vector[1] ** 2)
-                return curr_dist - prev_dist
-            else:
-                return None
-
-        #self._observation = [0]*16
-        # (uint), (uint)        bot health current, max
-        # (uint), (uint)        bot mana current, max
-        # (int16), (int16)      vector (dx,dy) from gate to bot's icon  !(minimap)!
-        # (int16), (int16)      vector (dx,dy) from bot to the closest blue minion (screen)
-        # (int16), (int16)      vector (dx,dy) from bot to the closest red minion (screen)
-        # (0,0,0,0,0,0)         bot cooldowns
+        #self._observation = [0]*11
+        # out[0]      float [0.0; 1.0]     bot health = current / max
+        # out[1]      float [0.0; 1.0]     bot mana = current / max
+        # out[2]      float [0.0; 1.0]     distance on minimap between gate and bot's icon = distance/100
+        # out[3]      float [0.0; 1.0]     distance on screen between bot and closest BLUE minion = 1/distance
+        # out[4]      float [0.0; 1.0]     distance on screen between bot and closest RED minion = 1/distance
+        # out[5..10]  6*int [0 or 1]       6*cooldown value
         reward = 0
 
         # ++++++ REWARD
@@ -146,14 +194,11 @@ class MyEnv(gym.Env):
                 if self._action_name in ['collect_globes', 'run_middle', 'hide_in_bushes']:
                     reward += 15
         # POSITION
-        # bot is behind blue minion
-        blue_minion = self._observation[6:8]    # (dx, dy)
-        if None not in blue_minion and blue_minion[0] > 0:
-            reward += 5
-        # bot is close to red minion
-        red_minion = self._observation[8:10]    # (dx, dy)
-        if None not in red_minion:
-            reward += 10
+        # bot is close to minions
+        dist_blue = self._observation[3]  # float [0.0; 1.0]
+        reward += min(5, 5*dist_blue*200)
+        dist_red = self._observation[4]  # float [0.0; 1.0]
+        reward += min(10, 10*dist_red*200)
         # SPEED
         #if self._action_name is not None and step_reward is not None:
         #    t_max = self.spectator.actions.objects[self._action_name].TIMEOUT
@@ -165,23 +210,34 @@ class MyEnv(gym.Env):
 
         # ------ REWARD
         # bot is dead
-        if self._done_reason is not None and self._done_reason == 'bot_dead':
-            reward -= 1000
+        if self._done_reason == 'bot_dead':
+            reward -= 2000
         # action was not successful
         if self._action_result is not None and self._action_result < 0:
-            reward -= 15
-        # bot was close to red minion but now he lost it from sight
-        prev_red_minion = self._prev_observation[8:10]    # (dx, dy)
-        red_minion = self._prev_observation[8:10]    # (dx, dy)
-        if None not in prev_red_minion and None in red_minion:
-            reward -= 50
+            reward -= 100
+        # 'incorrect' actions, based on situation (bot played defensive when it has more than 10% of health)
+        if self._action_name in ['hide_behind_gate', 'escape_behind_gate', 'use_well', 'use_spell_d'] \
+                and self._observation[0] > 0.1:
+            reward -= 1000
+        # bot was close to RED minion but currently lost it from screen
+        #prev_dist = self._prev_observation[4]  # float [0.0; 1.0]     distance on screen between bot and closest RED minion = 1/distance
+        #curr_dist = self._observation[4]  # float [0.0; 1.0]     distance on screen between bot and closest RED minion = 1/distance
+        #if prev_dist > 1/SCREEN_DIAG > curr_dist:  # 1/SCREEN_DIAG used, to compare to value 0.0
+        #    reward -= 50
         # bot moved behind the gate, even though bots'HP > 10%
-        if None not in [self._action_name, self._observation[0], self._observation[1]]:
-            if self._action_name in ['hide_behind_gate', 'escape_behind_gate'] \
-                    and self._observation[0] / self._observation[0] > 0.1:
-                reward -= 500
+        #if self._action_name in ['hide_behind_gate', 'escape_behind_gate'] and self._observation[0] > 0.1:
+        #    reward -= 500
 
+        # OBSOLETE code
         """
+        def get_dist_change(prev_vector, curr_vector):
+            if prev_vector != (0, 0) and curr_vector != (0, 0):
+                prev_dist = math.sqrt(prev_vector[0] ** 2 + prev_vector[1] ** 2)
+                curr_dist = math.sqrt(curr_vector[0] ** 2 + curr_vector[1] ** 2)
+                return curr_dist - prev_dist
+            else:
+                return None
+                
         # COMPARE TO PREVIOUS OBSERVATION
         #   bot moved closer to BLUE minion or away from it?
         prev_vector = self._prev_observation[6:8]   # (dx, dy)
@@ -279,8 +335,9 @@ class MyEnv(gym.Env):
 def build_model(in_states, in_actions):
     out_model = tf.keras.Sequential()
     out_model.add(Flatten(input_shape=(1, in_states)))
-    out_model.add(Dense(24, activation='relu'))
-    out_model.add(Dense(24, activation='relu'))
+    out_model.add(Dense(64, activation='relu'))
+    out_model.add(Dense(32, activation='relu'))
+    out_model.add(Dense(16, activation='relu'))
     out_model.add(Dense(in_actions, activation='linear'))
     out_model.add(Flatten())
     return out_model
@@ -308,5 +365,80 @@ def train_agent(in_agent, in_env, num_steps):
     return in_agent, history
 
 
+def save_model(in_hist, ):
+    try:
+        max_xp_ep = int(max(in_hist.history['episode_reward']))
+        print('History', in_hist.history)
+        if max_xp_ep > 0:
+            max_xp_ep = 'plus' + str(max_xp_ep)
+        else:
+            max_xp_ep = 'minus' + str(abs(max_xp_ep))
+    except Exception:
+        max_xp_ep = 'none'
+    model_path = f'rl/models/{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{max_xp_ep}.h5'
+    model.save(model_path)   # model.save_weights(f'rl/models/{name}_weights.h5', overwrite=True)
+
+    # save JSON file
+    filename = model_path.replace('.h5', '_data.json')
+    with open(filename, "w") as file:
+        json.dump(env.buffer, file)
+
+
+def plot_training_history(filename):
+    import json
+    """
+    self.buffer = {1:
+                       {'reward_total': 0.0,
+                        'num_steps': 0,
+                        'steps': {1: {'reward': 0, 'action_result': 0, 'action_name': '', 'observation': [0]*11}}
+                        }
+                   }
+    """
+    with open(filename, 'r') as json_file:
+        data = json.load(json_file)
+
+    # episodes
+    x = list(int(val)for val in data.keys())
+    # reward_total in each episode
+    y11 = [episode_obj['reward_total'] for episode_obj in data.values()]
+    # reward_total in each episode
+    y12 = [episode_obj['xp_total'] for episode_obj in data.values()]
+
+    # num_steps in each episode
+    y21 = [episode_obj['num_steps'] for episode_obj in data.values()]
+    # num_steps ended with success in each episode
+    y22 = [0]*len(x)
+    for i, episode_obj in enumerate(data.values()):
+        for step_obj in episode_obj['steps'].values():
+            if step_obj['action_result'] > 0:
+                y22[i] += 1
+    # num_steps ended with fail in each episode
+    y23 = [step_all - step_succ for step_all, step_succ in zip(y21, y22)]
+
+    #plot
+    fig, axs = plt.subplots(2, 1)
+    axs[0].plot(x, y11, 'b', x, y12, 'g', linewidth=1.0)
+    axs[0].set_xlabel('Episode number')
+    axs[0].set_ylabel('Reward/XP')
+    axs[0].grid(True)
+
+    axs[1].plot(x, y21, 'b', x, y22, 'g', x, y23, 'r', linewidth=1.0)
+    axs[1].set_xlabel('Episode number')
+    axs[1].set_ylabel('Number of all/succ/fail steps')
+    axs[1].grid(True)
+
+    plt.show()
+
+
 env = MyEnv()
 env = FlattenObservation(env)
+
+num_steps = 10000
+# load model
+#model = keras.models.load_model('rl/models/230623_133436_plus1757.h5')
+states = env.observation_space.shape[0]
+actions = env.action_space.n
+model = build_model(states, actions)
+# load weights
+model.load_weights('rl/models/230626_weights_ep27_xp2830.h5')
+agent = build_agent(model, actions, num_steps)

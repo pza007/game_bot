@@ -6,6 +6,7 @@ import numpy as np
 # -------------------------------------------------
 SCREEN_W = 1920
 SCREEN_H = 1080
+SCREEN_DIAG = 2202  # diagonal
 # Skip areas (do not detect bot or minions inside these areas)
 SKIP_AREA_TOP_MIDDLE =    [(630, 0), (1200, 77)]
 SKIP_AREA_BOTTOM_LEFT =   [(0, 894), (432, 1080)]
@@ -40,6 +41,17 @@ template_H10_num_6 = cv.imread(f'imgs\\templates\\numbers\\H10_num_6.png', cv.IM
 template_H10_num_7 = cv.imread(f'imgs\\templates\\numbers\\H10_num_7.png', cv.IMREAD_GRAYSCALE)
 template_H10_num_8 = cv.imread(f'imgs\\templates\\numbers\\H10_num_8.png', cv.IMREAD_GRAYSCALE)
 template_H10_num_9 = cv.imread(f'imgs\\templates\\numbers\\H10_num_9.png', cv.IMREAD_GRAYSCALE)
+
+template_H13_num_0 = cv.imread(f'imgs\\templates\\numbers\\H13_num_0.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_1 = cv.imread(f'imgs\\templates\\numbers\\H13_num_1.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_2 = cv.imread(f'imgs\\templates\\numbers\\H13_num_2.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_3 = cv.imread(f'imgs\\templates\\numbers\\H13_num_3.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_4 = cv.imread(f'imgs\\templates\\numbers\\H13_num_4.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_5 = cv.imread(f'imgs\\templates\\numbers\\H13_num_5.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_6 = cv.imread(f'imgs\\templates\\numbers\\H13_num_6.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_7 = cv.imread(f'imgs\\templates\\numbers\\H13_num_7.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_8 = cv.imread(f'imgs\\templates\\numbers\\H13_num_8.png', cv.IMREAD_GRAYSCALE)
+template_H13_num_9 = cv.imread(f'imgs\\templates\\numbers\\H13_num_9.png', cv.IMREAD_GRAYSCALE)
 
 template_H33_num_0 = cv.imread(f'imgs\\templates\\numbers\\H33_num_0.png', cv.IMREAD_GRAYSCALE)
 template_H33_num_1 = cv.imread(f'imgs\\templates\\numbers\\H33_num_1.png', cv.IMREAD_GRAYSCALE)

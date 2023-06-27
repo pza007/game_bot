@@ -38,40 +38,57 @@ class WindowCapture:
         """
 
     def get_screenshot(self):
-        # get the window image data
-        wDC = win32gui.GetWindowDC(self.hwnd)
-        dcObj = win32ui.CreateDCFromHandle(wDC)
-        cDC = dcObj.CreateCompatibleDC()
-        dataBitMap = win32ui.CreateBitmap()
-        dataBitMap.CreateCompatibleBitmap(dcObj, self.w, self.h)
-        cDC.SelectObject(dataBitMap)
-        cDC.BitBlt((0, 0), (self.w, self.h), dcObj, (0, 0), win32con.SRCCOPY)
-        #cDC.BitBlt((0, 0), (self.w, self.h), dcObj, (self.cropped_x, self.cropped_y), win32con.SRCCOPY)
+        """
+        Get screenshot image (frame) from defined window
 
-        # convert the raw data into a format opencv can read
-        signedIntsArray = dataBitMap.GetBitmapBits(True)
-        img = np.fromstring(signedIntsArray, dtype='uint8')
-        img.shape = (self.h, self.w, 4)
-        # save image to file
-        #dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
+        Args:
+            self
 
-        # free resources
-        dcObj.DeleteDC()
-        cDC.DeleteDC()
-        win32gui.ReleaseDC(self.hwnd, wDC)
-        win32gui.DeleteObject(dataBitMap.GetHandle())
+        Returns:
+            np.ndarray | None: screenshot image (frame) or None if error occurred
 
-        # drop the alpha channel, or cv.matchTemplate() will throw an error like:
-        #   error: (-215:Assertion failed) (depth == CV_8U || depth == CV_32F) && type == _templ.type()
-        #   && _img.dims() <= 2 in function 'cv::matchTemplate'
-        #img = img[...,:3]
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        try:
+            # get the window image data
+            wDC = win32gui.GetWindowDC(self.hwnd)
+            dcObj = win32ui.CreateDCFromHandle(wDC)
+            cDC = dcObj.CreateCompatibleDC()
+            dataBitMap = win32ui.CreateBitmap()
+            dataBitMap.CreateCompatibleBitmap(dcObj, self.w, self.h)
+            cDC.SelectObject(dataBitMap)
+            cDC.BitBlt((0, 0), (self.w, self.h), dcObj, (0, 0), win32con.SRCCOPY)
+            #cDC.BitBlt((0, 0), (self.w, self.h), dcObj, (self.cropped_x, self.cropped_y), win32con.SRCCOPY)
 
-        # make image C_CONTIGUOUS to avoid errors that look like:
-        #   File ... in draw_rectangles
-        #   TypeError: an integer is required (got type tuple)
-        # see the discussion here:
-        # https://github.com/opencv/opencv/issues/14866#issuecomment-580207109
-        img = np.ascontiguousarray(img)
+            # convert the raw data into a format opencv can read
+            signedIntsArray = dataBitMap.GetBitmapBits(True)
+            img = np.fromstring(signedIntsArray, dtype='uint8')
+            img.shape = (self.h, self.w, 4)
+            # save image to file
+            #dataBitMap.SaveBitmapFile(cDC, 'debug.bmp')
+
+            # free resources
+            dcObj.DeleteDC()
+            cDC.DeleteDC()
+            win32gui.ReleaseDC(self.hwnd, wDC)
+            win32gui.DeleteObject(dataBitMap.GetHandle())
+
+            # drop the alpha channel, or cv.matchTemplate() will throw an error like:
+            #   error: (-215:Assertion failed) (depth == CV_8U || depth == CV_32F) && type == _templ.type()
+            #   && _img.dims() <= 2 in function 'cv::matchTemplate'
+            #img = img[...,:3]
+
+            # make image C_CONTIGUOUS to avoid errors that look like:
+            #   File ... in draw_rectangles
+            #   TypeError: an integer is required (got type tuple)
+            # see the discussion here:
+            # https://github.com/opencv/opencv/issues/14866#issuecomment-580207109
+            img = np.ascontiguousarray(img)
+
+        except Exception as e:
+            print(f'Exception: {e}')
+            return None
 
         return img
 

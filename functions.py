@@ -170,8 +170,9 @@ def get_minions_positions(frame: np.ndarray, hsv_frame: np.ndarray) -> tuple[dic
     Returns:
         tuple[dict, None] | tuple[None, str]: dictionary of positions if inputs are valid, otherwise returns
         None and an error description.
-        {'blue': [(x_center, y_center), ...],
-         'red': [(x_center, y_center), ...]}
+
+        - {'blue': [(x_center, y_center), ...],
+        - 'red': [(x_center, y_center), ...]}
 
     Example:
         window = WindowCapture('Heroes of the Storm')
@@ -407,9 +408,10 @@ def get_bot_positions(hsv_frame: np.ndarray) -> tuple[dict, None] | tuple[None, 
     Returns:
         tuple[dict, None] | tuple[None, str]: dictionary of positions if inputs are valid, otherwise returns
         None and an error description.
-        {'health_bar':  ((x_min, y_min, x_max, y_max), (x_center,y_center)),
-        'bounding_box': ((x_min, y_min, x_max, y_max), (x_center,y_center)),
-        'circle':      ((x_min, y_min, x_max, y_max), (x_center,y_center))}
+
+        - {'health_bar':  ((x_min, y_min, x_max, y_max), (x_center,y_center)),
+        - 'bounding_box': ((x_min, y_min, x_max, y_max), (x_center,y_center)),
+        - 'circle':      ((x_min, y_min, x_max, y_max), (x_center,y_center))}
 
     Example:
         file_path = f'imgs\\detect\\gate.png'
@@ -562,6 +564,12 @@ def get_bot_positions(hsv_frame: np.ndarray) -> tuple[dict, None] | tuple[None, 
         return None, description
     get_bounding_box()
     get_circle()
+
+    # final check before return
+    for key, value in out.items():
+        for val in [j for i in value for j in i]:   # =all values from "value"
+            if not isinstance(val, int):
+                return None, f'value:{val} inside output is not integer'
 
     return out, None
 
@@ -733,6 +741,70 @@ def get_cooldowns(frame: np.ndarray) -> tuple[dict, None] | tuple[None, str]:
     return out, None
 
 
+def get_xp_from_tab(frame: np.ndarray) -> tuple[int, None] | tuple[None, str]:
+    """
+    Get experience (XP) value in the frame, after 'TAB' button is pressed
+    !IMPORTANT!: press 'TAB' to read values from window. After reading, press 'TAB' again, to hide window.
+
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        tuple[int, None] | tuple[None, str]: (xp value, None) or (None, error description) if error occurred.
+
+    Example:
+        import functions
+        import cv2 as cv
+        file_path = f'imgs\\detect\\xp\\xp_tab_1.png'
+        frame = cv.imread(file_path, cv.IMREAD_UNCHANGED)
+        print(functions.get_xp_from_tab(frame))
+    """
+    if not isinstance(frame, np.ndarray):
+        return None, f'frame should be np.ndarray'
+
+    # get part of image
+    x_min, y_min, x_max, y_max = 1355, 250, 1355 + 100, 250 + 30
+    img = frame[y_min:y_max, x_min:x_max]
+    img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+
+    # get positions of numbers
+    out = []  # (x,y,number)
+    threshold = 0.8
+    for idx, template in enumerate([template_H13_num_0, template_H13_num_1, template_H13_num_2,
+                                    template_H13_num_3, template_H13_num_4, template_H13_num_5,
+                                    template_H13_num_6, template_H13_num_7, template_H13_num_8,
+                                    template_H13_num_9]):
+        res = cv.matchTemplate(img_gray, template, cv.TM_CCOEFF_NORMED)
+        loc = np.where(res >= threshold)
+        for pt in zip(*loc[::-1]):
+            out.append((pt[0], pt[1], idx))
+    if len(out) == 0:
+        return None, f'No numbers (H13) found'
+    #   sort numbers (by x position)
+    out.sort(key=lambda x: x[0])
+
+    # filter only unique matches (if the same number is detected too close, means it is the same number)
+    out_filtered = []
+    prev_x, prev_y, prev_num = None, None, None
+    for x, y, num in out:
+        if prev_num is None:
+            prev_x, prev_y, prev_num = x, y, num
+            out_filtered.append((x, y, num))  # first number
+        else:
+            if num != prev_num:
+                out_filtered.append((x, y, num))  # different number
+            else:  # same number
+                if abs(x - prev_x) >= 5:  # x-shifted in image ==> different number
+                    out_filtered.append((x, y, num))
+            prev_x, prev_y, prev_num = x, y, num
+    if len(out_filtered) == 0:
+        return None, f'No numbers (H13), after filtering, found'
+
+    # create final value
+    return int(''.join([str(num) for (x, y, num) in out_filtered])), None
+
+
+# OBSOLETE function
 def get_xp_from_level(frame: np.ndarray, **kwargs) -> tuple[int, None] | tuple[None, str]:
     """
     Get value of XP in the frame. XP value is calculated based on XP bar and XP number
@@ -1376,12 +1448,6 @@ def get_move_position(position: tuple[int, int], direction: str) -> tuple[tuple[
 
 class Action:
     def __init__(self):
-        self.result = None
-        # None - not started
-        # 0    - in progress
-        # 1    - finished successfully
-        # -1   - finished unsuccessfully
-        self.description = ''
         self.steps = []
         self.step_idx = None
         self.t0 = None
@@ -1391,15 +1457,11 @@ class Action:
         raise NotImplemented
 
     def start(self):
-        self.result = 0
         self.step_idx = 0
         self.t0 = time.time()
 
     def process(self, *args, **kwargs):
         raise NotImplemented
-
-    def set_result(self, in_result, in_description):
-        self.result, self.description = in_result, in_description
 
 
 class Actions:
@@ -1428,15 +1490,8 @@ class Actions:
         }
         self.current_action = None
 
-    def get_available_actions(self, *args, **kwargs):
-        out = []
-        for name, action in self.objects.items():
-            if action.is_available(*args, **kwargs):
-                out.append(name)
-        return out
-
     def start(self, action_name):
-        """! IMPORTANT: make sure that action can be started with function: action.can_be_started() !"""
+        """! IMPORTANT !: make sure that action is available to start"""
         if self.current_action is None:
             action = self.objects[action_name]
 
@@ -1456,19 +1511,27 @@ class Actions:
             return False, 'current_action is not None'
 
     def process(self, *args, **kwargs):
+        """
+        out: action_result, action_description
+        action_result:
+        # None - error
+        # 0    - in progress
+        # 1    - finished successfully
+        # -1   - finished unsuccessfully
+        """
         if self.current_action is not None:
-            # finished?
-            if self.current_action.result in [-1, 1]:
-                # self.printout()
+            # result [-1, 0, 1], description [None or str]
+            result, description = self.current_action.process(*args, **kwargs)
+
+            # if finished or timeout -> clear action
+            if result in [-1, 1]:
+                if time.time() - self.current_action.t0 >= self.current_action.TIMEOUT:
+                    description = f'Reached timeout = {self.current_action.TIMEOUT} sec.'
                 self.current_action = None
-            # timeout?
-            elif time.time() - self.current_action.t0 >= self.current_action.TIMEOUT:
-                self.current_action.set_result(-1, f'Reached timeout = {self.current_action.TIMEOUT} sec.')
-                # self.printout()
-                self.current_action = None
-            # process...
-            else:
-                self.current_action.process(*args, **kwargs)
+
+            return result, description
+        else:
+            return None, f'self.current_action is None'
 
     def printout(self):
         if self.current_action is not None:
@@ -1521,7 +1584,28 @@ class ActionBasicAttack(Action):
 
         return True, ''
 
-    def process(self, *args, **kwargs):
+    def process(self, *args, **kwargs) -> tuple[int, str] | tuple[int, None]:
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('bot_pos_frame') is None:
+            return -1, f'bot_pos_frame is None'
+        if kwargs.get('minions') is None:
+            return -1, f'minions is None'
+        if len(kwargs.get('minions')['red']) == 0:
+            return -1, f'no RED minions found'
+
         bot_x, bot_y = kwargs.get('bot_pos_frame')['bounding_box']  # (center x, center y)
         minions = kwargs.get('minions')['red']
 
@@ -1530,12 +1614,10 @@ class ActionBasicAttack(Action):
         for minion_pos in minions:
             dist, err_desc = get_distance_between_points((bot_x, bot_y), minion_pos)
             if dist is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             distances.append((dist, minion_pos))
         if len(distances) == 0:
-            self.set_result(-1, 'No distances to minions')  # error!
-            return
+            return -1, 'No distances to minions'  # error!
         distances.sort()
         distance, target = distances[0]  # float dist, (x, y)
 
@@ -1553,7 +1635,9 @@ class ActionBasicAttack(Action):
         elif self.steps[self.step_idx] == 'click_attack':
             pyautogui.moveTo(target)
             pyautogui.press('a')
-            self.set_result(1, '')  # finish
+            return 1, None  # finished
+
+        return 0, None
 
 
 class ActionQAttack(Action):
@@ -1607,15 +1691,35 @@ class ActionQAttack(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
-        minions = kwargs.get('minions')
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('bot_pos_frame') is None:
+            return -1, f'bot_pos_frame is None'
+        if kwargs.get('minions') is None:
+            return -1, f'minions is None'
+        if kwargs.get('cooldowns') is None:
+            return -1, f'cooldowns is None'
+
         bot_pos = kwargs.get('bot_pos_frame')['bounding_box']  # (center_x, center_y)
+        minions = kwargs.get('minions')
         cooldowns = kwargs.get('cooldowns')
 
         if self.point_attack is None:
             point_attack, err_desc = get_center_point_for_spell(minions, bot_pos, 'Q')
             if point_attack is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             self.point_attack = point_attack
 
         if self.steps[self.step_idx] == 'choose_target':
@@ -1630,7 +1734,9 @@ class ActionQAttack(Action):
 
         elif self.steps[self.step_idx] == 'spell_cooldown':
             if cooldowns['Q']:
-                self.set_result(1, '')  # finish
+                return 1, None  # finished
+
+        return 0, None
 
 
 class ActionWAttack(Action):
@@ -1684,15 +1790,35 @@ class ActionWAttack(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
-        minions = kwargs.get('minions')
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('bot_pos_frame') is None:
+            return -1, f'bot_pos_frame is None'
+        if kwargs.get('minions') is None:
+            return -1, f'minions is None'
+        if kwargs.get('cooldowns') is None:
+            return -1, f'cooldowns is None'
+
         bot_pos = kwargs.get('bot_pos_frame')['bounding_box']  # (center_x, center_y)
+        minions = kwargs.get('minions')
         cooldowns = kwargs.get('cooldowns')
 
         if self.point_attack is None:
             point_attack, err_desc = get_center_point_for_spell(minions, bot_pos, 'W')
             if point_attack is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             self.point_attack = point_attack
 
         if self.steps[self.step_idx] == 'choose_target':
@@ -1707,7 +1833,9 @@ class ActionWAttack(Action):
 
         elif self.steps[self.step_idx] == 'spell_cooldown':
             if cooldowns['W']:
-                self.set_result(1, '')  # finish
+                return 1, None  # finished
+
+        return 0, None
 
 
 class ActionUseWell(Action):
@@ -1766,6 +1894,27 @@ class ActionUseWell(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('frame') is None:
+            return -1, f'frame is None'
+        if kwargs.get('bot_pos_minimap') is None:
+            return -1, f'bot_pos_minimap is None'
+        if kwargs.get('cooldowns') is None:
+            return -1, f'cooldowns is None'
+
         frame = kwargs.get('frame')
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
         cooldowns = kwargs.get('cooldowns')
@@ -1778,16 +1927,14 @@ class ActionUseWell(Action):
         elif self.steps[self.step_idx] == 'at_gate':
             in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'gate')
             if in_place is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             if in_place:
                 self.step_idx += 1
 
         elif self.steps[self.step_idx] == 'find_well':
             well_pos, err_desc = get_well_position(frame)
             if well_pos is None:
-                self.set_result(-1, err_desc)   # error!
-                return
+                return -1, err_desc  # error!
             self.well_x, self.well_y = well_pos
             self.step_idx += 1
 
@@ -1798,7 +1945,9 @@ class ActionUseWell(Action):
 
         elif self.steps[self.step_idx] == 'well_cooldown':
             if cooldowns['well']:
-                self.set_result(1, '')
+                return 1, None  # finished
+
+        return 0, None
 
 
 class ActionHideInBushes(Action):
@@ -1843,6 +1992,25 @@ class ActionHideInBushes(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('frame') is None:
+            return -1, f'frame is None'
+        if kwargs.get('bot_pos_minimap') is None:
+            return -1, f'bot_pos_minimap is None'
+
         frame = kwargs.get('frame')
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
 
@@ -1854,8 +2022,7 @@ class ActionHideInBushes(Action):
         elif self.steps[self.step_idx] == 'at_bushes':
             in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'bush')
             if in_place is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             if in_place:
                 self.step_idx += 1
 
@@ -1864,13 +2031,14 @@ class ActionHideInBushes(Action):
                 idx = self.hidden_values.index(None)
                 is_hidden, err_desc = is_bot_hidden(frame)
                 if is_hidden is None:
-                    self.set_result(-1, err_desc)  # error!
-                    return
+                    return -1, err_desc  # error!
                 if is_hidden:
-                    self.set_result(1, '')  # bot is hidden
+                    return 1, None  # finished
                 self.hidden_values[idx] = is_hidden
             except ValueError:
-                self.set_result(-1, "Bot is not hidden in bushes")
+                return -1, f'Bot is not hidden in bushes'
+
+        return 0, None
 
 
 class ActionHideBehindGate(Action):
@@ -1905,6 +2073,23 @@ class ActionHideBehindGate(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('bot_pos_minimap') is None:
+            return -1, f'bot_pos_minimap is None'
+
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
 
         if self.steps[self.step_idx] == 'click_gate':
@@ -1915,10 +2100,9 @@ class ActionHideBehindGate(Action):
         elif self.steps[self.step_idx] == 'at_gate':
             in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'gate')
             if in_place is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             if in_place:
-                self.set_result(1, '')  # finished
+                return 1, None  # finished
             else:
                 try:
                     idx = self.diff_values.index(None)
@@ -1927,7 +2111,9 @@ class ActionHideBehindGate(Action):
                 except ValueError:
                     # all values are gathered
                     if self.diff_values[-1] >= self.diff_values[0]:
-                        self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
+                        return -1, f'Bot is not moving towards gate since {len(self.diff_values)} frames'
+
+        return 0, None
 
 
 class ActionEscapeBehindGate(Action):
@@ -1988,6 +2174,27 @@ class ActionEscapeBehindGate(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('bot_pos_frame') is None:
+            return -1, f'bot_pos_frame is None'
+        if kwargs.get('bot_pos_minimap') is None:
+            return -1, f'bot_pos_minimap is None'
+        if kwargs.get('cooldowns') is None:
+            return -1, f'cooldowns is None'
+
         bot_pos_frame = kwargs.get('bot_pos_frame')
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
         cooldowns = kwargs.get('cooldowns')
@@ -2021,8 +2228,7 @@ class ActionEscapeBehindGate(Action):
                 if self.t1 is None:
                     self.t1 = time.time()
                 if time.time() - self.t1 >= self.timeout1:
-                    self.set_result(-1, f'Could not detect spell cooldown for {self.timeout1} sec.')
-                    self.t1 = None
+                    return -1, f'Could not detect spell cooldown for {self.timeout1} sec.'  # error!
 
         elif self.steps[self.step_idx] == 'click_gate':
             pyautogui.moveTo(1654, 912)
@@ -2032,10 +2238,9 @@ class ActionEscapeBehindGate(Action):
         elif self.steps[self.step_idx] == 'at_gate':
             in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'gate')
             if in_place is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             if in_place:
-                self.set_result(1, '')  # finished
+                return 1, None  # finished
             else:
                 try:
                     idx = self.diff_values.index(None)
@@ -2044,7 +2249,9 @@ class ActionEscapeBehindGate(Action):
                 except ValueError:
                     # all values are gathered
                     if self.diff_values[-1] >= self.diff_values[0]:
-                        self.set_result(-1, f'Bot is not moving towards gate since {len(self.diff_values)} frames')
+                        return -1, f'Bot is not moving towards gate since {len(self.diff_values)} frames'  # error!
+
+        return 0, None
 
 
 class ActionUseSpellD(Action):
@@ -2081,6 +2288,25 @@ class ActionUseSpellD(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('frame') is None:
+            return -1, f'frame is None'
+        if kwargs.get('cooldowns') is None:
+            return -1, f'cooldowns is None'
+
         frame = kwargs.get('frame')
         cooldowns = kwargs.get('cooldowns')
 
@@ -2109,11 +2335,13 @@ class ActionUseSpellD(Action):
                 if self.t1 is None:
                     self.t1 = time.time()
                 if time.time() - self.t1 >= self.timeout1:
-                    self.set_result(-1, f'Could not detect spell_blocked symbol for {self.timeout1} sec.')
+                    return -1, f'Could not detect spell_blocked symbol for {self.timeout1} sec.'  # error!
 
         elif self.steps[self.step_idx] == 'spell_cooldown':
             if cooldowns['D']:
-                self.set_result(1, '')
+                return 1, None  # finished
+
+        return 0, None
 
 
 class ActionMove(Action):
@@ -2147,13 +2375,29 @@ class ActionMove(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('bot_pos_minimap') is None:
+            return -1, f'bot_pos_minimap is None'
+
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
 
         if self.x is None or self.y is None:
             pos, err_desc = get_move_position(bot_pos_minimap, self.direction)
             if pos is None:
-                self.set_result(-1, err_desc)   # error!
-                return
+                return -1, err_desc  # error!
             self.x, self.y = pos
 
         if self.steps[self.step_idx] == 'click_position':
@@ -2164,13 +2408,15 @@ class ActionMove(Action):
         elif self.steps[self.step_idx] == 'at_position':
             x, y = bot_pos_minimap
             if self.x - 4 <= x <= self.x + 4 and self.y - 4 <= y <= self.y + 4:
-                self.set_result(1, '')  # finished
+                return 1, None  # finished
 
             # timeout?
             if self.t1 is None:
                 self.t1 = time.time()
             if time.time() - self.t1 >= self.timeout1:
-                self.set_result(-1, f'Reached timeout: {self.timeout1} sec.')
+                return -1, f'Reached timeout: {self.timeout1} sec.'  # error!
+
+        return 0, None
 
 
 class ActionRunMiddle(Action):
@@ -2205,6 +2451,23 @@ class ActionRunMiddle(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('bot_pos_minimap') is None:
+            return -1, f'bot_pos_minimap is None'
+
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
 
         if self.steps[self.step_idx] == 'click_middle':
@@ -2215,10 +2478,9 @@ class ActionRunMiddle(Action):
         elif self.steps[self.step_idx] == 'at_middle':
             in_place, err_desc = is_bot_icon_in_place(bot_pos_minimap, 'middle')
             if in_place is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             if in_place:
-                self.set_result(1, '')  # finished
+                return 1, None  # finished
             else:
                 try:
                     idx = self.diff_values.index(None)
@@ -2227,7 +2489,9 @@ class ActionRunMiddle(Action):
                 except ValueError:
                     # all values are gathered
                     if self.diff_values[-1] >= self.diff_values[0]:
-                        self.set_result(-1, f'Bot is not moving towards middle since {len(self.diff_values)} frames')
+                        return -1, f'Bot is not moving towards middle since {len(self.diff_values)} frames'  # error!
+
+        return 0, None
 
 
 class ActionCollectGlobes(Action):
@@ -2281,6 +2545,27 @@ class ActionCollectGlobes(Action):
         return True, ''
 
     def process(self, *args, **kwargs):
+        """
+        Process action and return it's result
+
+        Args:
+            kwargs: values that are set in: spectator_lib.Spectator.data
+
+        Returns:
+            tuple[int, str] | tuple[int, None]: result [-1, 0, 1], description [None or str]
+            0=action still in process, -1=action finished with error, 1=action finished with success
+
+        Raises:
+            None: This function does not raise any specific exceptions.
+        """
+        # check inputs
+        if kwargs.get('bot_pos_frame') is None:
+            return -1, f'bot_pos_frame is None'
+        if kwargs.get('bot_pos_minimap') is None:
+            return -1, f'bot_pos_minimap is None'
+        if kwargs.get('minions') is None:
+            return -1, f'minions is None'
+
         bot_pos = kwargs.get('bot_pos_frame')['bounding_box']  # (center_x, center_y)
         bot_pos_minimap = kwargs.get('bot_pos_minimap')
         minions = kwargs.get('minions')
@@ -2289,8 +2574,7 @@ class ActionCollectGlobes(Action):
             # get position in the center of the group
             point_center, err_desc = get_center_point_for_spell(minions, bot_pos, 'Q')
             if point_center is None:
-                self.set_result(-1, err_desc)  # error!
-                return
+                return -1, err_desc  # error!
             diff = (point_center[0] - bot_pos[0]) // 16, (point_center[1] - bot_pos[1]) // 16,
             self.point_target = (bot_pos_minimap[0] + diff[0], bot_pos_minimap[1] + diff[1])
 
@@ -2303,7 +2587,7 @@ class ActionCollectGlobes(Action):
             x, y = bot_pos_minimap
             if self.point_target[0] - 4 <= x <= self.point_target[0] + 4 and self.point_target[1] - 4 <= y <= \
                     self.point_target[1] + 4:
-                self.set_result(1, '')  # finished
+                return 1, None  # finished
             else:
                 try:
                     idx = self.diff_values.index(None)
@@ -2312,9 +2596,14 @@ class ActionCollectGlobes(Action):
                 except ValueError:
                     # all values are gathered
                     if self.diff_values[-1] >= self.diff_values[0]:
-                        self.set_result(-1, f'Bot is not moving towards target since {len(self.diff_values)} frames')
+                        return -1, f'Bot is not moving towards target since {len(self.diff_values)} frames'   # error!
+
+        return 0, None
 
 
+
+# OBSOLETE code
+"""
 # import cv2 as cv
 # from image_objects_lib import ImageObjects
 # from tracker_lib import TrackerClass
@@ -2324,7 +2613,6 @@ class ActionCollectGlobes(Action):
 # Tracker = TrackerClass()
 # Painter = PainterClass()
 
-"""
 class MinionClass:
     def __init__(self, point_center):
         self.img = None
@@ -2343,9 +2631,9 @@ inputs = [
     [MinionClass((841, 310)), MinionClass((905, 313)), MinionClass((982, 303)), MinionClass((1024, 288)), MinionClass((1146, 287)), MinionClass((946, 280))]
 ]
 cnt = 0
-"""
 
-"""
+
+
 def detect_objects(img):
     ImgObjs.img = img
     ImgObjs.hsv = cv.cvtColor(img, cv.COLOR_BGR2HSV)
