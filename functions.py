@@ -1446,6 +1446,74 @@ def get_move_position(position: tuple[int, int], direction: str) -> tuple[tuple[
         return (int(new_x), int(new_y)), None
 
 
+def label_frame(frame: np.ndarray):
+    """
+    Label frame with rectangles and information
+
+    Args:
+        frame (np.ndarray)
+
+    Returns:
+        frame (np.ndarray): labeled frame
+
+    Raises:
+        None: This function does not raise any specific exceptions.
+
+    Example:
+        labeled_frame = label_frame(frame)
+    """
+    #'bot_dead':         None or  bool
+    #'bot_pos_frame':    None or  {'health_bar': tuple[int, int], 'bounding_box': tuple[int, int], 'circle': tuple[int, int]}
+    #'bot_pos_minimap':  None or  tuple[int, int]
+    #'bot_health':       None or  tuple[int, int]
+    #'bot_mana':         None or  tuple[int, int]
+    #'cooldowns':        None or  {'Q': bool, 'W': bool, 'E': bool, 'R': bool, 'D': bool, 'well': bool}
+    #'minions':          None or  {'blue': list[tuple[int, int]], 'red': list[tuple[int, int]]}
+
+    # gather data
+    frame_hsv = cv.cvtColor(frame, cv.COLOR_BGR2HSV)
+    bot_dead, err_desc = is_bot_dead(frame)
+    bot_pos_frame, err_desc = get_bot_positions(frame_hsv)  # 'bounding_box': ((x_min, y_min, x_max, y_max), (x_center,y_center)),
+    bot_pos_minimap, desc = get_bot_icon_position(frame)
+    bot_health, err_desc = get_bot_health_value(frame)
+    bot_mana, err_desc = get_bot_mana_value(frame)
+    cooldowns, err_desc = get_cooldowns(frame)
+    minions, err_desc = get_minions_positions(frame, frame_hsv)  # {'blue': [(x_center, y_center), ...]
+
+    # draw rectangles
+    #   bot
+    ((x_min, y_min, x_max, y_max), (x_center,y_center)) = bot_pos_frame['bounding_box']
+    cv.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 255), 2)
+    #   minions
+    for color_name, color in [('red', (0, 0, 255)), ('blue',(255, 0, 0))]:
+        for x_center, y_center in minions[color_name]:
+            x_min, y_min, x_max, y_max = x_center-70//2, y_center-76//2, x_center+70//2, y_center+76//2
+            cv.rectangle(frame, (x_min, y_min), (x_max, y_max), color, 2)
+
+    # draw box
+    x_min, y_min, x_max, y_max = 10, 10, 380, 240
+    cv.rectangle(frame, (x_min, y_min), (x_max, y_max), (255, 255, 255), -1)    # white background
+    #text = f'Bot position = {bot_pos_frame["bounding_box"][1]}'
+    text = f'Bot position = {bot_pos_minimap}'
+    y = y_min + 25; dy = 32
+    cv.putText(img=frame, text=text, org=(x_min + 5, y), fontFace=cv.FONT_HERSHEY_DUPLEX, fontScale=0.8, color=(0, 0, 0), thickness=2)
+    text = f'Bot health = {bot_health[0]} / {bot_health[1]}'; y+=dy
+    cv.putText(img=frame, text=text, org=(x_min + 5, y), fontFace=cv.FONT_HERSHEY_DUPLEX, fontScale=0.8, color=(0, 0, 0), thickness=2)
+    text = f'Bot mana = {bot_mana[0]} / {bot_mana[1]}'; y+=dy
+    cv.putText(img=frame, text=text, org=(x_min + 5, y), fontFace=cv.FONT_HERSHEY_DUPLEX, fontScale=0.8, color=(0, 0, 0), thickness=2)
+    text = f'Num. BLUE minions = {len(minions["blue"])}'; y+=dy
+    cv.putText(img=frame, text=text, org=(x_min + 5, y), fontFace=cv.FONT_HERSHEY_DUPLEX, fontScale=0.8, color=(0, 0, 0), thickness=2)
+    text = f'Num. RED minions = {len(minions["red"])}'; y+=dy
+    cv.putText(img=frame, text=text, org=(x_min + 5, y), fontFace=cv.FONT_HERSHEY_DUPLEX, fontScale=0.8, color=(0, 0, 0), thickness=2)
+    text = f'Cooldowns:'; y+=dy
+    cv.putText(img=frame, text=text, org=(x_min + 5, y), fontFace=cv.FONT_HERSHEY_DUPLEX, fontScale=0.8, color=(0, 0, 0), thickness=2)
+    text = ', '.join([name for name, val  in cooldowns.items() if val]); y+=dy
+    if not text: text = '-'
+    cv.putText(img=frame, text='  ' + text, org=(x_min + 5, y), fontFace=cv.FONT_HERSHEY_DUPLEX, fontScale=0.8, color=(0, 0, 0), thickness=2)
+
+    return frame
+
+
 class Action:
     def __init__(self):
         self.steps = []

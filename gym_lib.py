@@ -28,8 +28,7 @@ class MyEnv(gym.Env):
         self.observation_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(1, 11), dtype=np.float32)
         self.spectator = Spectator()
         self.buffer = {1:
-                           {'reward_total': 0.0,
-                            'xp_total': 0,
+                           {'xp_total': 0,
                             'num_steps': 0,
                             'steps': {1: {'reward': 0, 'action_result': 0, 'action_result_desc': '', 'action_name': '', 'observation': [0]*11}}
                             }
@@ -44,8 +43,8 @@ class MyEnv(gym.Env):
         self._action_result = None
         self._action_result_desc = None
         self._reward = 0
-        self._reward_total = 0
-        self._xp_total = None
+        self._xp_prev = None
+        self._xp_total = 0
         self._done = False
         self._done_reason = None
 
@@ -57,8 +56,8 @@ class MyEnv(gym.Env):
         self._action_result = None
         self._action_result_desc = None
         self._reward = 0
-        self._reward_total = 0
-        self._xp_total = None
+        self._xp_prev = None
+        self._xp_total = 0
         self._done = False
         self._done_reason = None
 
@@ -66,35 +65,28 @@ class MyEnv(gym.Env):
         global model
         """
         self.buffer = {1:
-                        {'reward_total': 0.0,
-                         'xp_total': 0,
+                        {'xp_total': 0,
                          'num_steps': 0,
                          'steps': {1: {'reward': 0, 'action_result': 0, 'action_result_desc': '', 'action_name': '', 'observation': [0]*11}}
                          }
         """
         if self._done:
             # xp_total
-            if self._xp_total is None:
-                xp_total = -1
-            else:
-                xp_total = self._xp_total
-            self.buffer[self.episode_num]['xp_total'] = xp_total
+            self.buffer[self.episode_num]['xp_total'] = self._xp_total
             # save weights if xp_total is high
-            if xp_total > 1000:
-                model.save_weights(f'rl/models/weights_ep{self.episode_num}_xp{xp_total}.h5', overwrite=True)
+            if self._xp_total > 1000:
+                model.save_weights(f'rl/models/weights_ep{self.episode_num}_xp{self._xp_total}.h5', overwrite=True)
 
             # create new episode entry
             self.episode_num += 1
             self.step_num = 1
             self.buffer[self.episode_num] = \
-                {'reward_total': 0.0,
-                 'xp_total': 0,
+                {'xp_total': 0,
                  'num_steps': 0,
                  'steps': {1: {'reward': 0, 'action_result': 0, 'action_result_desc': '', 'action_name': '', 'observation': [0]*11}}
                  }
         else:
             # fill episode parameters
-            self.buffer[self.episode_num]['reward_total'] = self._reward_total
             self.buffer[self.episode_num]['num_steps'] = self.step_num
             self.buffer[self.episode_num]['steps'][self.step_num] = \
                 {'reward': self._reward,
@@ -105,17 +97,6 @@ class MyEnv(gym.Env):
 
             self.step_num += 1
 
-        """
-        if self._done:
-            out_str = f' Reward={self._reward}, Total={self._reward_total}. Game finished: reason={self._done_reason}, '
-        else:
-            if self._action_result > 0:  # success
-                out_str = f' Reward={self._reward}. Action={self._action_name}'
-            else:  # fail
-                out_str = f' Reward={self._reward}.\tfailed action={self._action_name}, reason={self._action_result_desc}.'
-        print(out_str)
-        return {'info': out_str}
-        """
         return {'info': ''}
 
     def render(self, mode="human"):
@@ -128,46 +109,42 @@ class MyEnv(gym.Env):
         return [0]*11, {}
 
     def step(self, action):
-        step_reward = None
+        # xp_before
+        if self._xp_prev is None:
+            xp_before, err_desc = self.spectator.get_xp_value()
+        else:
+            xp_before = self._xp_prev
 
         # done
         self._done, self._done_reason = self.spectator.is_game_finished()
-
-        # xp_total (actual experience gathered in game, from first to last step of episode)
-        if self.step_num == 1:
-            xp_value, err_desc = self.spectator.get_xp_value()
-            if xp_value is not None:
-                self._xp_total = xp_value
-            else:
-                self._xp_total = None
-        if self._done and self._xp_total is not None:
-            xp_value, err_desc = self.spectator.get_xp_value()
-            if xp_value is not None:
-                self._xp_total = max(xp_value - self._xp_total, 0)
-            else:
-                self._xp_total = None
 
         # action, result
         if not self._done:  # wait for action to be finished
             self._action = action
             self._action_name = self.get_action_name(action)
-            self._action_result, self._action_result_desc, step_reward = self.spectator.execute_action(self._action_name)
+            self._action_result, self._action_result_desc, _ = self.spectator.execute_action(self._action_name)
         else:
             self._action, self._action_name, self._action_result, self._action_result_desc = None, None, None, None
 
-        # observations
-        if self._prev_observation is None:
-            self._prev_observation = self.spectator.get_game_state()
-        else:
-            self._prev_observation = self._observation
+        # xp_after
+        xp_after, err_desc = self.spectator.get_xp_value()
+        self._xp_prev = xp_after   # could be None
+
+        # observation
         self._observation = self.spectator.get_game_state()
 
         # reward
-        self._reward = self.get_reward(step_reward)
-        self._reward_total += self._reward
+        if None not in [xp_before, xp_after]:
+            self._reward = max(xp_after-xp_before, 0)
+        else:
+            self._reward = -1
+
+        # xp_total
+        self._xp_total += self._reward
 
         return self._observation, self._reward, self._done, False, self.get_info()
 
+    # OBSOLETE function
     def get_reward(self, step_reward):
         #self._observation = [0]*11
         # out[0]      float [0.0; 1.0]     bot health = current / max
@@ -289,7 +266,6 @@ class MyEnv(gym.Env):
 
         return reward
 
-
     @staticmethod
     def get_action_name(number):
         if number == 0:
@@ -400,7 +376,7 @@ def plot_training_history(filename):
     # episodes
     x = list(int(val)for val in data.keys())
     # reward_total in each episode
-    y11 = [episode_obj['reward_total'] for episode_obj in data.values()]
+    #y11 = [episode_obj['reward_total'] for episode_obj in data.values()]
     # reward_total in each episode
     y12 = [episode_obj['xp_total'] for episode_obj in data.values()]
 
@@ -417,9 +393,11 @@ def plot_training_history(filename):
 
     #plot
     fig, axs = plt.subplots(2, 1)
-    axs[0].plot(x, y11, 'b', x, y12, 'g', linewidth=1.0)
+    #axs[0].plot(x, y11, 'b', x, y12, 'g', linewidth=1.0)
+    axs[0].plot(x, y12, 'g', linewidth=1.0)
     axs[0].set_xlabel('Episode number')
-    axs[0].set_ylabel('Reward/XP')
+    #axs[0].set_ylabel('Reward/XP')
+    axs[0].set_ylabel('XP')
     axs[0].grid(True)
 
     axs[1].plot(x, y21, 'b', x, y22, 'g', x, y23, 'r', linewidth=1.0)
@@ -429,7 +407,7 @@ def plot_training_history(filename):
 
     plt.show()
 
-
+"""
 env = MyEnv()
 env = FlattenObservation(env)
 
@@ -440,5 +418,6 @@ states = env.observation_space.shape[0]
 actions = env.action_space.n
 model = build_model(states, actions)
 # load weights
-model.load_weights('rl/models/230626_weights_ep27_xp2830.h5')
+#model.load_weights('rl/models/230626_weights_ep27_xp2830.h5')
 agent = build_agent(model, actions, num_steps)
+"""

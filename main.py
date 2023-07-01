@@ -1,6 +1,6 @@
 import os
+import functions
 import gym_lib
-
 
 """
 s = spectator_lib.Spectator()
@@ -27,7 +27,7 @@ for episode in range(1, episodes + 1):
 """
 
 # plot data
-#gym_lib.plot_training_history('rl/models/230627_114638_plus1771_data.json')
+gym_lib.plot_training_history('rl/models/230628_030928_plus1040_data.json')
 
 # train model
 gym_lib.num_steps = 8000    # = 5 hours of work
@@ -65,7 +65,7 @@ model.fit(train_images, train_labels, epochs=epochs)
 #pygame.quit()
 #model.save('model.h5')
 # model = keras.models.load_model('complete_saved_model/')
-#filename = f'logs\\{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{xp_gain}.txt'
+#filename = f'docs\\{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{xp_gain}.txt'
 
 
 
@@ -213,18 +213,25 @@ while success:
   if success: count_s+=1
   count_all += 1
 print(f'number of frames={count_all}, success={count_s} ({(count_s/count_all)*100}%)')
+"""
 
 # LABEL EACH FRAME
-#for i in range(649):
-  file_path = f"imgs\\frames\\frame{i}.jpg"
+"""
+import cv2 as cv
+import spectator_lib
+import functions
 
-  img = cv.imread(file_path, cv.IMREAD_UNCHANGED)  # cv.IMREAD_UNCHANGED, cv.IMREAD_REDUCED_COLOR_2
-  # detect
-  bot, minions_red, minions_blue = detect_objects(img)
+s = spectator_lib.Spectator()
+
+i = 0
+while 1:
+  frame = s.window.get_screenshot()
+  file_path = f'C:\\Users\\Lordor\\Videos\\Captures\\frames\\frame{i}.jpg'
+  cv.imwrite(file_path, frame)
   # draw
-  l_img = draw_objects(img, bot, minions_red, minions_blue)
-  # save
-  file_path = f"imgs\\l_frames\\frame{i}.jpg"
-  save_image(l_img, file_path)
-  print(f'frame {i}')
+  frame = functions.label_frame(frame)
+  file_path = f'C:\\Users\\Lordor\\Videos\\Captures\\l_frames\\frame{i}.jpg'
+  cv.imwrite(file_path, frame)
+  print(f'frame_{i}')
+  i+=1
 """

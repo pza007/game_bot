@@ -238,9 +238,9 @@ class Spectator:
             return -1, f'action_name: {action_name} not defined', 0
 
         self.get_data()
-        xp_prev, err_desc = self.get_xp_value()
-        if xp_prev is None:
-            return -1, f'xp_prev is None, Reason:{err_desc}', 0
+        #xp_prev, err_desc = self.get_xp_value()
+        #if xp_prev is None:
+        #    return -1, f'xp_prev is None, Reason:{err_desc}', 0
 
         action_result, action_description = None, None
         available, err_desc = self.actions.objects[action_name].is_available(**self.data)
@@ -256,12 +256,12 @@ class Spectator:
                         break   # action finished
 
                 # when current_action is None -> get current xp
-                xp_current, err_desc = self.get_xp_value()
-                if xp_current is None:
-                    return -1, f'xp_current is None, Reason:{err_desc}', 0
-                else:
-                    # final output
-                    return action_result, action_description, max(xp_current-xp_prev, 0)
+                #xp_current, err_desc = self.get_xp_value()
+                #if xp_current is None:
+                #    return -1, f'xp_current is None, Reason:{err_desc}', 0
+                #else:
+                # final output
+                return action_result, action_description, 0
             else:
                 return -1, f'Action failed at starting. Reason:{err_desc}', 0
         else:
@@ -474,7 +474,7 @@ class Spectator:
         
     def store_data(self):
         xp_gain = self.get_xp_gain()
-        filename = f'logs\\{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{xp_gain}.txt'
+        filename = f'docs\\{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{xp_gain}.txt'
         header = '\t'.join(['action', 'bot_pos_frame', 'bot_pos_minimap', 'bot_health', 'bot_mana', 'cooldowns', 'minions'])
         lines = []
         for data in self.buffer:
