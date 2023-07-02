@@ -407,7 +407,7 @@ def plot_training_history(filename):
 
     plt.show()
 
-"""
+
 env = MyEnv()
 env = FlattenObservation(env)
 
@@ -420,4 +420,3 @@ model = build_model(states, actions)
 # load weights
 #model.load_weights('rl/models/230626_weights_ep27_xp2830.h5')
 agent = build_agent(model, actions, num_steps)
-"""

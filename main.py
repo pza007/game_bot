@@ -27,7 +27,7 @@ for episode in range(1, episodes + 1):
 """
 
 # plot data
-gym_lib.plot_training_history('rl/models/230628_030928_plus1040_data.json')
+gym_lib.plot_training_history('rl/models/230628_030928/230628_030928_plus1040_data.json')
 
 # train model
 gym_lib.num_steps = 8000    # = 5 hours of work
