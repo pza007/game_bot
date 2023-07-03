@@ -1,15 +1,12 @@
-import os
-import functions
-import gym_lib
+# AI
+#import gym_lib
+#gym_lib.plot_training_history('rl/models/ai_XP1180_data.json')
+from ai_lib import AI
+env = AI()
+env.play_game(10)
 
-"""
-s = spectator_lib.Spectator()
-s.init_game()
-action_name = 'use_spell_d'
-result, description, xp_gain = s.execute_action(action_name)
-print(f'Action:{action_name}, Result:{result}, Desc:{description}, XP_gain:{xp_gain}')
-"""
 
+# TEST ENV
 """
 episodes = 2
 for episode in range(1, episodes + 1):
@@ -26,6 +23,12 @@ for episode in range(1, episodes + 1):
     print('Episode:{} Score:{}'.format(episode, score))
 """
 
+
+# MACHINE LEARNING
+"""
+import os
+import gym_lib
+
 # plot data
 gym_lib.plot_training_history('rl/models/230628_030928/230628_030928_plus1040_data.json')
 
@@ -39,10 +42,6 @@ gym_lib.save_model(hist)
 # shutdown PC
 os.system("shutdown /s /t 1")
 
-
-
-
-
 # test model
 #from keras.optimizers import Adam
 #agent.compile(Adam(learning_rate=1e-3), metrics=['mae'])
@@ -50,25 +49,7 @@ os.system("shutdown /s /t 1")
 #print(np.mean(scores.history['episode_reward']))
 #scores = model.test(env, nb_episodes=2, visualize=False)
 #print(np.mean(scores.history['episode_reward']))
-
-
-
-
-
-
 """
-model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=1e-3),
-              loss=tf.keras.losses.MeanSquaredError(),
-              metrics=[tf.metrics.MeanAbsoluteError()])
-model.fit(train_images, train_labels, epochs=epochs)
-"""
-#pygame.quit()
-#model.save('model.h5')
-# model = keras.models.load_model('complete_saved_model/')
-#filename = f'docs\\{datetime.datetime.now().strftime("%y%m%d_%H%M%S")}_{xp_gain}.txt'
-
-
-
 
 
 
@@ -214,7 +195,6 @@ while success:
   count_all += 1
 print(f'number of frames={count_all}, success={count_s} ({(count_s/count_all)*100}%)')
 """
-
 # LABEL EACH FRAME
 """
 import cv2 as cv
